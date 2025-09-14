@@ -73,9 +73,6 @@ class SidebarWidget(QWidget):
         # Add navigation items
         self.add_navigation_items()
         
-        # Add spacer to push settings item to bottom
-        spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
-        
         # Create settings list (separate list for settings item)
         self.settings_list = QListWidget()
         self.settings_list.setFrameStyle(0)  # Remove frame for cleaner look
@@ -87,9 +84,13 @@ class SidebarWidget(QWidget):
         self.add_settings_item()
         
         # Add widgets to frame layout
-        self.sidebar_layout.addWidget(self.navigation_list)
-        self.sidebar_layout.addItem(spacer)
-        self.sidebar_layout.addWidget(self.settings_list)
+        # Make navigation list expand and settings stick to bottom
+        self.navigation_list.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Expanding
+        )
+        self.sidebar_layout.addWidget(self.navigation_list, 1)
+        self.sidebar_layout.addWidget(self.settings_list, 0)
         
         # Add frame to main layout
         main_layout.addWidget(self.sidebar_frame)
@@ -112,10 +113,10 @@ class SidebarWidget(QWidget):
     
     def add_settings_item(self):
         """Add settings item to the settings list."""
-        settings_item = QListWidgetItem("⚙️ Settings")
+        settings_item = QListWidgetItem("Settings")
         
         # Try to load settings icon
-        icon_path = os.path.join(self.icons_path, "settings.png")
+        icon_path = os.path.join(self.icons_path, "settings.svg")
         if os.path.exists(icon_path):
             icon = QIcon(icon_path)
             settings_item.setIcon(icon)
