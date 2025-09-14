@@ -8,9 +8,12 @@ for AG Food business operations.
 
 import sys
 from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtCore import Qt
 from ui.main_window import MainAppWindow
 from ui.login_dialog import LoginDialog
 from database.manager import DatabaseManager
+from config.app_config import AppConfig
+from i18n.language_manager import language_manager as i18n
 
 # --- DEVELOPMENT FLAG ---
 # Set to True to skip the login screen during development
@@ -18,6 +21,14 @@ DISABLE_LOGIN = True
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+
+    # Load persisted app config (e.g., language) and apply upfront
+    app_config = AppConfig()
+    i18n.set_language(app_config.get_language())
+    # Apply initial layout direction based on language (RTL for Arabic)
+    app.setLayoutDirection(
+        Qt.LayoutDirection.RightToLeft if i18n.is_rtl() else Qt.LayoutDirection.LeftToRight
+    )
     
     # Initialize the database manager
     db_manager = DatabaseManager()

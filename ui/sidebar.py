@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal, QSize
 from PyQt6.QtGui import QIcon
+from i18n.language_manager import language_manager as i18n
 
 
 class SidebarWidget(QWidget):
@@ -19,15 +20,15 @@ class SidebarWidget(QWidget):
     navigation_changed = pyqtSignal(int)  # Emitted when navigation selection changes
     settings_clicked = pyqtSignal()  # Emitted when settings button is clicked
     
-    # Navigation items configuration with icon file names
+    # Navigation items configuration with translation keys and icon file names
     NAVIGATION_ITEMS = [
-        {"text": "Stock Management", "icon": "stock.svg"},
-        {"text": "Invoice Generation", "icon": "invoice.svg"},
-        {"text": "Inventory Control", "icon": "inventory.svg"},
-        {"text": "Order Processing", "icon": "order.svg"},
-        {"text": "Supplier Management", "icon": "supplier.svg"},
-        {"text": "Reports & Analytics", "icon": "reports.svg"},
-        {"text": "Quality Control", "icon": "quality.svg"}
+        {"key": "nav.stock_management", "icon": "stock.svg"},
+        {"key": "nav.invoice_generation", "icon": "invoice.svg"},
+        {"key": "nav.inventory_control", "icon": "inventory.svg"},
+        {"key": "nav.order_processing", "icon": "order.svg"},
+        {"key": "nav.supplier_management", "icon": "supplier.svg"},
+        {"key": "nav.reports_analytics", "icon": "reports.svg"},
+        {"key": "nav.quality_control", "icon": "quality.svg"}
     ]
     
     def __init__(self):
@@ -98,7 +99,8 @@ class SidebarWidget(QWidget):
     def add_navigation_items(self):
         """Add navigation items with icons to the list."""
         for item_config in self.NAVIGATION_ITEMS:
-            item = QListWidgetItem(item_config["text"])
+            text = i18n.tr(item_config["key"])  # Translated label
+            item = QListWidgetItem(text)
             
             # Try to load and set icon
             icon_path = os.path.join(self.icons_path, item_config["icon"])
@@ -107,13 +109,13 @@ class SidebarWidget(QWidget):
                 item.setIcon(icon)
                 # print(f"Loaded icon for {item_config['text']}: {icon_path}")
             else:
-                print(f"Icon not found for {item_config['text']}: {icon_path}")
+                print(f"Icon not found for {item_config['key']}: {icon_path}")
             
             self.navigation_list.addItem(item)
     
     def add_settings_item(self):
         """Add settings item to the settings list."""
-        settings_item = QListWidgetItem("Settings")
+        settings_item = QListWidgetItem(i18n.tr("nav.settings"))
         
         # Try to load settings icon
         icon_path = os.path.join(self.icons_path, "settings.svg")
@@ -124,6 +126,17 @@ class SidebarWidget(QWidget):
             print(f"Settings icon not found: {icon_path}")
         
         self.settings_list.addItem(settings_item)
+
+    def retranslate_ui(self):
+        """Retranslate all sidebar labels and items when language changes."""
+        current_nav_index = self.navigation_list.currentRow()
+        self.navigation_list.clear()
+        self.add_navigation_items()
+        if 0 <= current_nav_index < self.navigation_list.count():
+            self.navigation_list.setCurrentRow(current_nav_index)
+
+        self.settings_list.clear()
+        self.add_settings_item()
     
     def connect_signals(self):
         """Connect internal signals."""

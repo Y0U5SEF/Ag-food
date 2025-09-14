@@ -152,6 +152,81 @@ class ThemeManager:
             font-size: 14px;
             font-family: {font_family};
         }}
+
+        /* ---------------- Settings Page ---------------- */
+        QWidget#settingsRoot {{
+            background-color: {colors['surface']};
+        }}
+
+        /* Tabs */
+        QWidget#settingsRoot QTabWidget::pane {{
+            border: 1px solid {colors['border']};
+            border-radius: 8px;
+            background: {colors['background']};
+            margin-top: 10px;
+        }}
+
+        QWidget#settingsRoot QTabBar::tab {{
+            background: transparent;
+            color: {colors['text']};
+            padding: 8px 14px;
+            margin-right: 6px;
+            border: 1px solid transparent;
+            border-bottom: 2px solid transparent;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            font-weight: 500;
+        }}
+
+        QWidget#settingsRoot QTabBar::tab:selected {{
+            background: {colors['background']};
+            border-color: {colors['border']};
+            border-bottom: 2px solid {colors['primary']};
+        }}
+
+        QWidget#settingsRoot QTabBar::tab:hover:!selected {{
+            background: {colors['settings_hover']};
+        }}
+
+        /* Labels inside settings */
+        QWidget#settingsRoot QLabel {{
+            color: {colors['text_secondary']};
+            font-size: 14px;
+            font-weight: 600;
+        }}
+
+        /* Dropdowns */
+        QWidget#settingsRoot QComboBox {{
+            background: {colors['background']};
+            color: {colors['text']};
+            border: 1px solid {colors['input_border']};
+            border-radius: 6px;
+            padding: 6px 10px;
+            min-width: 200px;
+        }}
+
+        QWidget#settingsRoot QComboBox:hover {{
+            border-color: {colors['primary']};
+        }}
+
+        QWidget#settingsRoot QComboBox:focus {{
+            border-color: {colors['primary']};
+        }}
+
+        QWidget#settingsRoot QComboBox::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 28px;
+            border-left: 1px solid {colors['border']};
+        }}
+
+        QWidget#settingsRoot QComboBox QAbstractItemView {{
+            background: {colors['surface']};
+            color: {colors['text']};
+            border: 1px solid {colors['border']};
+            selection-background-color: {colors['primary']};
+            selection-color: white;
+        }}
         """
         
     def get_sidebar_stylesheet(self, theme_name='light'):

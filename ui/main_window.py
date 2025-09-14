@@ -4,13 +4,17 @@ Coordinates header, sidebar, and content areas.
 """
 
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QStackedWidget, QLabel, QMessageBox
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QStackedWidget, QLabel, QMessageBox, QTabWidget, QComboBox, QFormLayout
 )
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt
 
 from .header import HeaderWidget
 from .sidebar import SidebarWidget
 from styles.theme_manager import ThemeManager
+from i18n.language_manager import language_manager as i18n
+from config.app_config import AppConfig
 
 
 class MainAppWindow(QMainWindow):
@@ -20,14 +24,18 @@ class MainAppWindow(QMainWindow):
         super().__init__()
         self.db_manager = db_manager
         self.theme_manager = ThemeManager()
+        self.app_config = AppConfig()
         self.setup_window()
         self.setup_ui()
         self.connect_signals()
         self.apply_theme()
+        # Apply language after UI is constructed
+        self.apply_language()
         
     def setup_window(self):
         """Set up basic window properties."""
-        self.setWindowTitle("AG Food - Stock & Invoice Manager")
+        # Title will be set by language application
+        self.setWindowTitle(i18n.tr('app.window_title'))
         self.setGeometry(100, 100, 800, 600)
         self.setMinimumSize(600, 400)
         
@@ -80,13 +88,35 @@ class MainAppWindow(QMainWindow):
         invoice_layout = QVBoxLayout(self.invoice_widget)
         invoice_layout.addWidget(QLabel("Invoice Generation UI will be here."))
         
-        # Settings content
+        # Settings content with tabs (General tab -> Language)
         self.settings_widget = QWidget()
+        self.settings_widget.setObjectName("settingsRoot")
         settings_layout = QVBoxLayout(self.settings_widget)
-        settings_layout.addWidget(QLabel("Settings UI will be here."))
-        settings_layout.addWidget(QLabel("- Theme selection (Light/Dark)"))
-        settings_layout.addWidget(QLabel("- Language selection (English/Arabic)"))
-        settings_layout.addWidget(QLabel("- RTL layout support"))
+        settings_layout.setContentsMargins(16, 16, 16, 16)
+        settings_layout.setSpacing(12)
+
+        self.settings_tabs = QTabWidget()
+        self.settings_tabs.setObjectName("settingsTabs")
+        self.general_tab = QWidget()
+        general_form = QFormLayout(self.general_tab)
+        general_form.setContentsMargins(12, 12, 12, 12)
+        general_form.setHorizontalSpacing(16)
+        general_form.setVerticalSpacing(14)
+        self.language_label = QLabel(i18n.tr('settings.language.label'))
+        self.language_combo = QComboBox()
+        # Populate with visible names, store lang code in itemData
+        for code, label in i18n.SUPPORTED.items():
+            self.language_combo.addItem(label, userData=code)
+        # Set current language
+        current_lang = i18n.get_language()
+        idx = self.language_combo.findData(current_lang)
+        if idx >= 0:
+            self.language_combo.setCurrentIndex(idx)
+
+        general_form.addRow(self.language_label, self.language_combo)
+        self.settings_tabs.addTab(self.general_tab, i18n.tr('settings.tab.general'))
+
+        settings_layout.addWidget(self.settings_tabs)
         
         # Add to stack
         self.content_stack.addWidget(self.stock_widget)
@@ -98,6 +128,8 @@ class MainAppWindow(QMainWindow):
         # Sidebar signals
         self.sidebar.navigation_changed.connect(self.switch_content)
         self.sidebar.settings_clicked.connect(self.show_settings)
+        # Settings signals
+        self.language_combo.currentIndexChanged.connect(self.on_language_changed)
         
     def switch_content(self, index):
         """Switch the main content area based on navigation selection."""
@@ -145,3 +177,43 @@ class MainAppWindow(QMainWindow):
             # Fallback for backward compatibility
             username = user_data if isinstance(user_data, str) else "Unknown User"
             self.header.update_username(username)
+
+    # --- Language/i18n ---
+    def on_language_changed(self):
+        code = self.language_combo.currentData()
+        if not code:
+            return
+        i18n.set_language(code)
+        # Update layout direction globally
+        app = QApplication.instance()
+        if app is not None:
+            app.setLayoutDirection(Qt.LayoutDirection.RightToLeft if i18n.is_rtl() else Qt.LayoutDirection.LeftToRight)
+        self.apply_language()
+        # Persist language choice
+        try:
+            self.app_config.set_language(code)
+            self.app_config.save()
+        except Exception:
+            pass
+
+    def apply_language(self):
+        """Apply current language to all visible UI texts."""
+        # Window title
+        self.setWindowTitle(i18n.tr('app.window_title'))
+
+        # Sidebar items
+        self.sidebar.retranslate_ui()
+
+        # Settings tab texts
+        tab_index = self.settings_tabs.indexOf(self.general_tab)
+        if tab_index != -1:
+            self.settings_tabs.setTabText(tab_index, i18n.tr('settings.tab.general'))
+        self.language_label.setText(i18n.tr('settings.language.label'))
+
+        # Content placeholders
+        # These are simple labels we added; find and set if present
+        if isinstance(self.stock_widget.layout().itemAt(0).widget(), QLabel):
+            self.stock_widget.layout().itemAt(0).widget().setText(i18n.tr('content.stock.placeholder'))
+        if isinstance(self.invoice_widget.layout().itemAt(0).widget(), QLabel):
+            self.invoice_widget.layout().itemAt(0).widget().setText(i18n.tr('content.invoice.placeholder'))
+        # Settings page placeholder isn't used anymore (tabs), so nothing to update here
