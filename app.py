@@ -14,7 +14,7 @@ from database.manager import DatabaseManager
 
 # --- DEVELOPMENT FLAG ---
 # Set to True to skip the login screen during development
-DISABLE_LOGIN = False
+DISABLE_LOGIN = True
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
@@ -29,7 +29,7 @@ if __name__ == '__main__':
         """Handles the UI flow after the database is successfully connected."""
         if DISABLE_LOGIN:
             print("Login disabled. Showing main window directly.")
-            main_window.show()
+            main_window.showMaximized()
         else:
             login_dialog.show()
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     db_manager.database_ready.connect(on_db_ready)
     db_manager.database_error.connect(on_db_error)
     login_dialog.login_successful.connect(main_window.update_username)
-    login_dialog.login_successful.connect(lambda user_data: main_window.show())
+    login_dialog.login_successful.connect(lambda user_data: main_window.showMaximized())
 
     # Start the database connection process
     db_manager.connect_db()

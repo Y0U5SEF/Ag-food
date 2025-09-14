@@ -22,7 +22,12 @@ class SidebarWidget(QWidget):
     # Navigation items configuration with icon file names
     NAVIGATION_ITEMS = [
         {"text": "Stock Management", "icon": "stock.svg"},
-        {"text": "Invoice Generation", "icon": "invoice.svg"}
+        {"text": "Invoice Generation", "icon": "invoice.svg"},
+        {"text": "Inventory Control", "icon": "inventory.svg"},
+        {"text": "Order Processing", "icon": "order.svg"},
+        {"text": "Supplier Management", "icon": "supplier.svg"},
+        {"text": "Reports & Analytics", "icon": "reports.svg"},
+        {"text": "Quality Control", "icon": "quality.svg"}
     ]
     
     def __init__(self):

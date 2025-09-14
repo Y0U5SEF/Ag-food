@@ -44,12 +44,12 @@ class LoginDialog(QDialog):
 
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("Username")
-        self.username_input.setText("admin")
+        # self.username_input.setText("admin")
         
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password_input.setText("admin")
+        # self.password_input.setText("admin")
         
         form_layout.addRow("Username:", self.username_input)
         form_layout.addRow("Password:", self.password_input)
