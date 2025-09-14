@@ -106,8 +106,6 @@ class MainAppWindow(QMainWindow):
             
     def show_settings(self):
         """Show the settings panel when settings button is clicked."""
-        # Clear sidebar selection to indicate we're in settings
-        self.sidebar.clear_navigation_selection()
         # Switch to settings content (index 2)
         self.content_stack.setCurrentIndex(2)
         
@@ -120,11 +118,8 @@ class MainAppWindow(QMainWindow):
         
         # Apply component-specific stylesheets
         self.header.setStyleSheet(self.theme_manager.get_header_stylesheet(theme_name))
-        self.sidebar.get_navigation_list().setStyleSheet(
+        self.sidebar.sidebar_frame.setStyleSheet(
             self.theme_manager.get_sidebar_stylesheet(theme_name)
-        )
-        self.sidebar.get_settings_button().setStyleSheet(
-            self.theme_manager.get_settings_button_stylesheet(theme_name)
         )
         
     def toggle_theme(self):

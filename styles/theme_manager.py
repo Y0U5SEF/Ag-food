@@ -30,6 +30,7 @@ class ThemeManager:
     ]
     
     LIGHT_THEME = {
+        'white': '#ffffff',
         'background': '#ffffff',
         'surface': '#f5f5f5',
         'primary': '#0078d4',
@@ -45,6 +46,7 @@ class ThemeManager:
     }
     
     DARK_THEME = {
+        'white': '#ffffff',
         'background': '#1e1e1e',
         'surface': '#2d2d30',
         'primary': '#0078d4',
@@ -146,18 +148,22 @@ class ThemeManager:
         font_family = self.get_font_family_string()
         
         return f"""
-        QListWidget {{
+        QFrame#sidebarFrame {{
             background-color: {colors['sidebar_bg']};
-            border: 1px solid {colors['border']};
-            border-radius: 5px;
-            font-size: 14px;
+            border-right: 2px solid {colors['border']};
+        }}
+        
+        QListWidget {{
+            background-color: transparent;
+            border: none;
+            font-size: 18px;
             font-family: {font_family};
             color: {colors['text']};
             outline: none;
         }}
         
         QListWidget::item {{
-            padding: 12px 16px;
+            padding: 10px 5px;
             border-bottom: 1px solid {colors['border']};
             background-color: transparent;
             font-family: {font_family};
@@ -166,12 +172,12 @@ class ThemeManager:
         QListWidget::item:selected {{
             background-color: {colors['sidebar_selected']};
             color: white;
-            border-radius: 3px;
+
         }}
         
         QListWidget::item:hover:!selected {{
             background-color: {colors['sidebar_hover']};
-            border-radius: 3px;
+
         }}
         
         QListWidget::item:last {{
@@ -193,7 +199,7 @@ class ThemeManager:
         QPushButton {{
             background-color: {colors['settings_bg']};
             border: 1px solid {colors['border']};
-            border-radius: 5px;
+
             padding: 10px;
             font-size: 13px;
             font-family: {font_family};
@@ -219,24 +225,37 @@ class ThemeManager:
         
         return f"""
         QWidget#header {{
-            background-color: {colors['surface']};
-            border-bottom: 2px solid {colors['border']};
+            background-color: transparent;
             padding: 0px;
         }}
         
+        QWidget#headerContainer {{
+            background-color: {colors['primary']};
+            border: none;
+            border-radius: 0px;
+        }}
+        
         QLabel#appName {{
-            color: {colors['primary']};
-            font-size: 18px;
+            color: white;
+            background-color: transparent;
+            font-size: 22px;
             font-family: {font_family};
             font-weight: bold;
-            padding: 12px 16px;
+            padding: 0px;
         }}
         
         QLabel#userName {{
-            color: {colors['text_secondary']};
+            color: {colors['white']};
+            background-color: transparent;
             font-size: 14px;
             font-family: {font_family};
-            padding: 12px 16px;
+            padding: 0px;
             font-weight: 500;
+        }}
+        
+        QLabel#adminIcon {{
+            background-color: transparent;
+            padding: 0px;
+            margin: 0px;
         }}
         """

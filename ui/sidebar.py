@@ -6,7 +6,7 @@ Contains navigation menu with icons and settings button.
 import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QListWidget, QListWidgetItem, 
-    QPushButton, QSpacerItem, QSizePolicy
+    QPushButton, QSpacerItem, QSizePolicy, QFrame
 )
 from PyQt6.QtCore import pyqtSignal, QSize
 from PyQt6.QtGui import QIcon
@@ -43,31 +43,51 @@ class SidebarWidget(QWidget):
         """Set up the sidebar UI components."""
         self.setFixedWidth(300)
         
-        # Create main layout
-        self.sidebar_layout = QVBoxLayout(self)
-        self.sidebar_layout.setContentsMargins(10, 10, 10, 10)
+        # Create main layout for the sidebar widget
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Create frame container that will have the background styling
+        self.sidebar_frame = QFrame()
+        self.sidebar_frame.setObjectName("sidebarFrame")
+        
+        # Create layout for the frame container
+        self.sidebar_layout = QVBoxLayout(self.sidebar_frame)
+        self.sidebar_layout.setContentsMargins(0, 0, 0, 0)  # No margins on frame layout
         self.sidebar_layout.setSpacing(0)
         
         # Create the main navigation list
         self.navigation_list = QListWidget()
         self.navigation_list.setFrameStyle(0)  # Remove frame for cleaner look
+        self.navigation_list.setContentsMargins(10, 10, 10, 0)  # Add margins to navigation list
         
         # Set icon size for navigation items (24x24 pixels)
-        self.navigation_list.setIconSize(QSize(24, 24))
+        self.navigation_list.setIconSize(QSize(26, 26))
         
         # Add navigation items
         self.add_navigation_items()
         
-        # Add spacer to push settings button to bottom
+        # Add spacer to push settings item to bottom
         spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
         
-        # Create settings button
-        self.settings_button = QPushButton("⚙️ Settings")
+        # Create settings list (separate list for settings item)
+        self.settings_list = QListWidget()
+        self.settings_list.setFrameStyle(0)  # Remove frame for cleaner look
+        self.settings_list.setIconSize(QSize(26, 26))
+        self.settings_list.setFixedHeight(50)  # Fixed height for single item
+        self.settings_list.setContentsMargins(10, 0, 10, 10)  # Bottom margin for settings
         
-        # Add widgets to layout
+        # Add settings item
+        self.add_settings_item()
+        
+        # Add widgets to frame layout
         self.sidebar_layout.addWidget(self.navigation_list)
         self.sidebar_layout.addItem(spacer)
-        self.sidebar_layout.addWidget(self.settings_button)
+        self.sidebar_layout.addWidget(self.settings_list)
+        
+        # Add frame to main layout
+        main_layout.addWidget(self.sidebar_frame)
         
     def add_navigation_items(self):
         """Add navigation items with icons to the list."""
@@ -79,25 +99,63 @@ class SidebarWidget(QWidget):
             if os.path.exists(icon_path):
                 icon = QIcon(icon_path)
                 item.setIcon(icon)
-                print(f"Loaded icon for {item_config['text']}: {icon_path}")
+                # print(f"Loaded icon for {item_config['text']}: {icon_path}")
             else:
                 print(f"Icon not found for {item_config['text']}: {icon_path}")
             
             self.navigation_list.addItem(item)
     
+    def add_settings_item(self):
+        """Add settings item to the settings list."""
+        settings_item = QListWidgetItem("⚙️ Settings")
+        
+        # Try to load settings icon
+        icon_path = os.path.join(self.icons_path, "settings.png")
+        if os.path.exists(icon_path):
+            icon = QIcon(icon_path)
+            settings_item.setIcon(icon)
+        else:
+            print(f"Settings icon not found: {icon_path}")
+        
+        self.settings_list.addItem(settings_item)
+    
     def connect_signals(self):
         """Connect internal signals."""
-        self.navigation_list.currentRowChanged.connect(self.navigation_changed.emit)
-        self.settings_button.clicked.connect(self.settings_clicked.emit)
+        self.navigation_list.currentRowChanged.connect(self.on_navigation_changed)
+        self.settings_list.currentRowChanged.connect(self.on_settings_clicked)
+    
+    def on_navigation_changed(self, index):
+        """Handle navigation item click."""
+        if index >= 0:  # Valid selection
+            # Clear settings selection and force update
+            self.settings_list.clearSelection()
+            self.settings_list.setCurrentRow(-1)  # Ensure no row is current
+            # Emit navigation changed signal
+            self.navigation_changed.emit(index)
+    
+    def on_settings_clicked(self, index):
+        """Handle settings item click."""
+        if index >= 0:  # Valid selection
+            # Clear main navigation selection and force update
+            self.navigation_list.clearSelection()
+            self.navigation_list.setCurrentRow(-1)  # Ensure no row is current
+            # Emit settings clicked signal
+            self.settings_clicked.emit()
     
     def set_current_navigation(self, index):
         """Set the current navigation selection."""
         if 0 <= index < self.navigation_list.count():
+            # Clear settings selection when setting main navigation
+            self.settings_list.clearSelection()
             self.navigation_list.setCurrentRow(index)
     
     def clear_navigation_selection(self):
         """Clear the navigation selection."""
         self.navigation_list.clearSelection()
+        
+    def clear_settings_selection(self):
+        """Clear the settings selection."""
+        self.settings_list.clearSelection()
     
     def add_navigation_item(self, text):
         """Add a new navigation item."""
@@ -108,6 +166,6 @@ class SidebarWidget(QWidget):
         """Get the navigation list widget for styling purposes."""
         return self.navigation_list
     
-    def get_settings_button(self):
-        """Get the settings button for styling purposes."""
-        return self.settings_button
+    def get_settings_list(self):
+        """Get the settings list widget for styling purposes."""
+        return self.settings_list
