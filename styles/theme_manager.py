@@ -42,7 +42,13 @@ class ThemeManager:
         'sidebar_hover': '#e1dfdd',
         'sidebar_selected': '#0078d4',
         'settings_bg': '#e6e6e6',
-        'settings_hover': '#d4d4d4'
+        'settings_hover': '#d4d4d4',
+        'dialog_bg': '#f8f9fa',
+        'dialog_border': '#ccc',
+        'dialog_title': '#2c3e50',
+        'input_border': '#ced4da',
+        'button_primary': '#007bff',
+        'button_primary_hover': '#0056b3'
     }
     
     DARK_THEME = {
@@ -58,7 +64,13 @@ class ThemeManager:
         'sidebar_hover': '#2a2d2e',
         'sidebar_selected': '#0078d4',
         'settings_bg': '#383838',
-        'settings_hover': '#404040'
+        'settings_hover': '#404040',
+        'dialog_bg': '#2d2d30',
+        'dialog_border': '#4c4c4c',
+        'dialog_title': '#ffffff',
+        'input_border': '#4c4c4c',
+        'button_primary': '#0078d4',
+        'button_primary_hover': '#106ebe'
     }
     
     def __init__(self):
@@ -257,5 +269,64 @@ class ThemeManager:
             background-color: transparent;
             padding: 0px;
             margin: 0px;
+        }}
+        """
+        
+    def get_login_dialog_stylesheet(self, theme_name='light'):
+        """Generate login dialog-specific stylesheet with custom font."""
+        colors = self.get_theme_colors(theme_name)
+        font_family = self.get_font_family_string()
+        
+        return f"""
+        QDialog {{
+            background-color: {colors['dialog_bg']};
+            border: 2px solid {colors['dialog_border']};
+            font-family: {font_family};
+        }}
+        
+        QLabel {{
+            font-family: {font_family};
+            font-size: 16px;
+            color: {colors['text']};
+        }}
+        
+        QLineEdit {{
+            border: 1px solid {colors['input_border']};
+            padding: 8px;
+            font-size: 14px;
+            font-family: {font_family};
+            background-color: {colors['background']};
+            color: {colors['text']};
+        }}
+        
+        QLineEdit:focus {{
+            border: 2px solid {colors['primary']};
+        }}
+        
+        QPushButton {{
+            background-color: {colors['button_primary']};
+            color: white;
+            border: none;
+            padding: 10px;
+            font-weight: bold;
+            font-size: 16px;
+            font-family: {font_family};
+        }}
+        
+        QPushButton:hover {{
+            background-color: {colors['button_primary_hover']};
+        }}
+        
+        QPushButton:pressed {{
+            background-color: {colors['primary_hover']};
+        }}
+        
+        #title_label {{
+            font-size: 24px;
+            font-weight: bold;
+            color: {colors['dialog_title']};
+            margin-bottom: 20px;
+            text-align: center;
+            font-family: {font_family};
         }}
         """

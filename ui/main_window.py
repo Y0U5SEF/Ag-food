@@ -127,10 +127,21 @@ class MainAppWindow(QMainWindow):
         new_theme = 'dark' if self.theme_manager.current_theme == 'light' else 'light'
         self.apply_theme(new_theme)
         
+    def set_login_dialog_theme(self, login_dialog):
+        """Apply current theme to login dialog."""
+        login_dialog.set_theme(self.theme_manager.current_theme)
+        
     def show_db_error(self, message):
         """Display a message box with a database connection error."""
         QMessageBox.critical(self, "Database Error", message)
         
-    def update_username(self, username):
-        """Update the username displayed in the header."""
-        self.header.update_username(username)
+    def update_username(self, user_data):
+        """Update the username displayed in the header with user's full name."""
+        if isinstance(user_data, dict) and 'full_name' in user_data:
+            full_name = user_data['full_name']
+            self.header.update_username(full_name)
+            print(f"Updated header with user: {full_name}")
+        else:
+            # Fallback for backward compatibility
+            username = user_data if isinstance(user_data, str) else "Unknown User"
+            self.header.update_username(username)

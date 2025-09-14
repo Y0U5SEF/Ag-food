@@ -12,7 +12,7 @@ from PyQt6.QtGui import QIcon, QPixmap
 class HeaderWidget(QWidget):
     """Header widget containing app name and user information."""
     
-    def __init__(self, app_name="AG Food", username="John Doe"):
+    def __init__(self, app_name="AG Food", username=""):
         super().__init__()
         self.app_name = app_name
         self.username = username
