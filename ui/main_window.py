@@ -5,16 +5,24 @@ Coordinates header, sidebar, and content areas.
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStackedWidget, QLabel, QMessageBox, QTabWidget, QComboBox, QFormLayout
+    QStackedWidget, QLabel, QMessageBox, QTabWidget, QComboBox, QFormLayout,
+    QGridLayout, QToolButton, QLineEdit, QSizePolicy
 )
+from PyQt6.QtWidgets import QStyle
+from PyQt6.QtCore import QSize
+from typing import Optional
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 
 from .header import HeaderWidget
 from .sidebar import SidebarWidget
 from styles.theme_manager import ThemeManager
+from .inventory import InventoryControlWidget
+from .invoice import InvoiceWidget
 from i18n.language_manager import language_manager as i18n
 from config.app_config import AppConfig
+from .stock import StockManagementWidget
+from .clients import ClientsManagementWidget
 
 
 class MainAppWindow(QMainWindow):
@@ -79,14 +87,10 @@ class MainAppWindow(QMainWindow):
     def setup_content_widgets(self):
         """Set up the content widgets for each section."""
         # Stock Management content
-        self.stock_widget = QWidget()
-        stock_layout = QVBoxLayout(self.stock_widget)
-        stock_layout.addWidget(QLabel("Stock Management UI will be here."))
+        self.stock_widget = StockManagementWidget(self.db_manager)
         
         # Invoice Generation content
-        self.invoice_widget = QWidget()
-        invoice_layout = QVBoxLayout(self.invoice_widget)
-        invoice_layout.addWidget(QLabel("Invoice Generation UI will be here."))
+        self.invoice_widget = InvoiceWidget(self.db_manager, stock_widget=self.stock_widget)
         
         # Settings content with tabs (General tab -> Language)
         self.settings_widget = QWidget()
@@ -115,13 +119,22 @@ class MainAppWindow(QMainWindow):
 
         general_form.addRow(self.language_label, self.language_combo)
         self.settings_tabs.addTab(self.general_tab, i18n.tr('settings.tab.general'))
+        
+        # Clients management content
+        self.clients_widget = ClientsManagementWidget(self.db_manager)
+
+        # Inventory Control content (Manage Locations)
+        self.inventory_widget = InventoryControlWidget(self.db_manager, stock_widget=self.stock_widget)
 
         settings_layout.addWidget(self.settings_tabs)
         
-        # Add to stack
-        self.content_stack.addWidget(self.stock_widget)
-        self.content_stack.addWidget(self.invoice_widget)
-        self.content_stack.addWidget(self.settings_widget)
+        # Add to stack in same order as sidebar NAVIGATION_ITEMS
+        # 0: Stock, 1: Invoice, 2: Clients, 3: Inventory Control, ...
+        self.content_stack.addWidget(self.stock_widget)        # index 0
+        self.content_stack.addWidget(self.invoice_widget)      # index 1
+        self.content_stack.addWidget(self.clients_widget)      # index 2
+        self.content_stack.addWidget(self.inventory_widget)    # index 3
+        self.content_stack.addWidget(self.settings_widget)     # index 4 (settings accessed from gear)
         
     def connect_signals(self):
         """Connect signals between components."""
@@ -135,11 +148,18 @@ class MainAppWindow(QMainWindow):
         """Switch the main content area based on navigation selection."""
         if index >= 0:  # Valid selection
             self.content_stack.setCurrentIndex(index)
+            # Ensure inventory view refreshes when navigated to
+            try:
+                inv_index = 3
+                if index == inv_index and hasattr(self, 'inventory_widget'):
+                    self.inventory_widget.refresh()
+            except Exception:
+                pass
             
     def show_settings(self):
         """Show the settings panel when settings button is clicked."""
-        # Switch to settings content (index 2)
-        self.content_stack.setCurrentIndex(2)
+        # Switch to settings content (index 4)
+        self.content_stack.setCurrentIndex(4)
         
     def apply_theme(self, theme_name='light'):
         """Apply the specified theme to the entire application."""
@@ -204,6 +224,13 @@ class MainAppWindow(QMainWindow):
         # Sidebar items
         self.sidebar.retranslate_ui()
 
+        # Stock management UI
+        if hasattr(self, 'stock_widget'):
+            self.stock_widget.retranslate_ui()
+        # Clients management UI
+        if hasattr(self, 'clients_widget'):
+            self.clients_widget.retranslate_ui()
+
         # Settings tab texts
         tab_index = self.settings_tabs.indexOf(self.general_tab)
         if tab_index != -1:
@@ -212,8 +239,7 @@ class MainAppWindow(QMainWindow):
 
         # Content placeholders
         # These are simple labels we added; find and set if present
-        if isinstance(self.stock_widget.layout().itemAt(0).widget(), QLabel):
-            self.stock_widget.layout().itemAt(0).widget().setText(i18n.tr('content.stock.placeholder'))
+        # Stock widget manages its own labels; nothing to retranslate here for now
         if isinstance(self.invoice_widget.layout().itemAt(0).widget(), QLabel):
             self.invoice_widget.layout().itemAt(0).widget().setText(i18n.tr('content.invoice.placeholder'))
         # Settings page placeholder isn't used anymore (tabs), so nothing to update here

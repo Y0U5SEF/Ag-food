@@ -28,6 +28,8 @@ class ThemeManager:
         "Alexandria-SemiBold.ttf",
         "Alexandria-Thin.ttf"
     ]
+
+    
     
     LIGHT_THEME = {
         'white': '#ffffff',
@@ -153,6 +155,88 @@ class ThemeManager:
             font-family: {font_family};
         }}
 
+        /* Global inputs */
+        QLineEdit, QSpinBox, QComboBox, QDateTimeEdit, QDoubleSpinBox {{
+            background-color: {colors['background']};
+            color: {colors['text']};
+            border: 2px solid {colors['input_border']};
+            padding: 6px 10px;
+            selection-background-color: {colors['primary']};
+            selection-color: white;
+        }}
+        QLineEdit:hover {{
+            border-color: {colors['primary']};
+        }}
+        QLineEdit:focus {{
+            border: 2px solid {colors['primary']};
+        }}
+        QLineEdit:disabled {{
+            color: {colors['text_secondary']};
+            background-color: {colors['surface']};
+            border-color: {colors['border']};
+        }}
+
+        /* ------------------------ComboBox---------------------------*/
+        QComboBox::drop-down, QDateTimeEdit::drop-down {{
+            background: {colors['input_border']};
+            border: none;
+            subcontrol-position: center right;
+            width: 25px;
+            height: 100%;
+        }}
+
+        /* Popup list container for ALL combo boxes */
+        QComboBox QAbstractItemView {{
+            background: {colors['surface']};
+            color: {colors['text']};
+            border: 1px solid {colors['border']};
+            border-radius: 6px;
+            padding: 2px 0; /* top/bottom padding as requested */
+            selection-background-color: {colors['primary']};
+            selection-color: white;
+        }}
+
+        /* Individual items inside the popup list */
+        QComboBox QAbstractItemView::item {{
+            padding: 2px 10px; /* vertical 2px, comfortable horizontal spacing */
+        }}
+
+        /* Hover effect for list items */
+        QComboBox QAbstractItemView::item:hover {{
+            background: {colors['settings_hover']};
+        }}
+
+        /* Explicit selected style to ensure readability */
+        QComboBox QAbstractItemView::item:selected {{
+            background: {colors['primary']};
+            color: white;
+        }}
+
+        QSpinBox::down-button, QDoubleSpinBox::down-button {{
+            background: {colors['input_border']};
+            width: 25px;
+        }}
+
+        QSpinBox::up-button, QDoubleSpinBox::up-button {{
+            background: {colors['input_border']};
+            width: 25px;
+        }}
+
+        QComboBox::down-arrow, QDateTimeEdit::down-arrow {{
+            image: url(icons/sort_down.svg);
+            width:10px;
+        }}
+
+        QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
+            image: url(icons/sort_up.svg);
+            width: 10px;
+        }}
+
+        QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
+            image: url(icons/sort_down.svg);
+            width: 10px;
+        }}
+
         /* ---------------- Settings Page ---------------- */
         QWidget#settingsRoot {{
             background-color: {colors['surface']};
@@ -161,7 +245,6 @@ class ThemeManager:
         /* Tabs */
         QWidget#settingsRoot QTabWidget::pane {{
             border: 1px solid {colors['border']};
-            border-radius: 8px;
             background: {colors['background']};
             margin-top: 10px;
         }}
@@ -200,7 +283,6 @@ class ThemeManager:
             background: {colors['background']};
             color: {colors['text']};
             border: 1px solid {colors['input_border']};
-            border-radius: 6px;
             padding: 6px 10px;
             min-width: 200px;
         }}
@@ -226,6 +308,171 @@ class ThemeManager:
             border: 1px solid {colors['border']};
             selection-background-color: {colors['primary']};
             selection-color: white;
+        }}
+
+        /* ---------------- Stock Page ---------------- */
+        QWidget#stockRoot QPushButton, QWidget#stockRoot QToolButton {{
+            background: {colors['surface']};
+            color: {colors['text']};
+            border: 1px solid {colors['border']};
+
+                        padding: 6px 12px;
+            font-size: 14px;
+            font-weight: 500;
+        }}
+
+        QWidget#stockRoot QPushButton:hover, QWidget#stockRoot QToolButton:hover {{
+            background: {colors['settings_hover']};
+        }}
+
+        QWidget#stockRoot QPushButton:pressed, QWidget#stockRoot QToolButton:pressed {{
+            background: {colors['primary']};
+            color: white;
+            border-color: {colors['primary']};
+        }}
+
+        QWidget#stockRoot QPushButton:disabled, QWidget#stockRoot QToolButton:disabled {{
+            color: {colors['text_secondary']};
+            border-color: {colors['border']};
+            background: {colors['surface']};
+        }}
+
+        /* Mirror stock button styles for Inventory, Clients, and Invoice sections */
+        QWidget#inventoryRoot QPushButton, QWidget#inventoryRoot QToolButton,
+        QWidget#clientsRoot QPushButton, QWidget#clientsRoot QToolButton,
+        QWidget#invoiceRoot QPushButton, QWidget#invoiceRoot QToolButton {{
+            background: {colors['surface']};
+            color: {colors['text']};
+            border: 1px solid {colors['border']};
+            padding: 6px 12px;
+            font-size: 14px;
+            font-weight: 500;
+        }}
+        QWidget#inventoryRoot QPushButton:hover, QWidget#inventoryRoot QToolButton:hover,
+        QWidget#clientsRoot QPushButton:hover, QWidget#clientsRoot QToolButton:hover,
+        QWidget#invoiceRoot QPushButton:hover, QWidget#invoiceRoot QToolButton:hover {{
+            background: {colors['settings_hover']};
+        }}
+        QWidget#inventoryRoot QPushButton:pressed, QWidget#inventoryRoot QToolButton:pressed,
+        QWidget#clientsRoot QPushButton:pressed, QWidget#clientsRoot QToolButton:pressed,
+        QWidget#invoiceRoot QPushButton:pressed, QWidget#invoiceRoot QToolButton:pressed {{
+            background: {colors['primary']};
+            color: white;
+            border-color: {colors['primary']};
+        }}
+        QWidget#inventoryRoot QPushButton:disabled, QWidget#inventoryRoot QToolButton:disabled,
+        QWidget#clientsRoot QPushButton:disabled, QWidget#clientsRoot QToolButton:disabled,
+        QWidget#invoiceRoot QPushButton:disabled, QWidget#invoiceRoot QToolButton:disabled {{
+            color: {colors['text_secondary']};
+            border-color: {colors['border']};
+            background: {colors['surface']};
+        }}
+
+        /* Table styling with zebra (striped) rows - Stock */
+        QWidget#stockRoot QTableWidget {{
+            background: {colors['background']};
+            gridline-color: {colors['border']};
+            /* Use a lighter blue for row selection */
+            selection-background-color: #ADD8E6; /* lightblue */
+            selection-color: #000000; /* ensure readable text */
+            border: 1px solid {colors['border']};
+
+                    }}
+        /* Alternate row background */
+        QWidget#stockRoot QTableWidget::item:alternate {{
+            background: {colors['surface']};
+        }}
+        /* Ensure selected rows (including alternates) use light blue and readable text */
+        QWidget#stockRoot QTableWidget::item:selected {{
+            background: #ADD8E6; /* lightblue */
+            color: #000000;
+        }}
+        QWidget#stockRoot QTableWidget::item:alternate:selected {{
+            background: #ADD8E6; /* lightblue */
+            color: #000000;
+        }}
+        
+        /* Same styling for Inventory Control tables */
+        QWidget#inventoryRoot QTableWidget {{
+            background: {colors['background']};
+            gridline-color: {colors['border']};
+            selection-background-color: #ADD8E6;
+            selection-color: #000000;
+            border: 1px solid {colors['border']};
+        }}
+        QWidget#inventoryRoot QTableWidget::item:alternate {{
+            background: {colors['surface']};
+        }}
+        QWidget#inventoryRoot QTableWidget::item:selected {{
+            background: #ADD8E6;
+            color: #000000;
+        }}
+        QWidget#inventoryRoot QTableWidget::item:alternate:selected {{
+            background: #ADD8E6;
+            color: #000000;
+        }}
+
+        /* Same styling for Clients tables */
+        QWidget#clientsRoot QTableWidget {{
+            background: {colors['background']};
+            gridline-color: {colors['border']};
+            selection-background-color: #ADD8E6;
+            selection-color: #000000;
+            border: 1px solid {colors['border']};
+        }}
+        QWidget#clientsRoot QTableWidget::item:alternate {{
+            background: {colors['surface']};
+        }}
+        QWidget#clientsRoot QTableWidget::item:selected {{
+            background: #ADD8E6;
+            color: #000000;
+        }}
+        QWidget#clientsRoot QTableWidget::item:alternate:selected {{
+            background: #ADD8E6;
+            color: #000000;
+        }}
+        QWidget#clientsRoot QHeaderView::section {{
+            background: {colors['surface']};
+            color: {colors['text']};
+            padding: 6px 8px;
+            border: 1px solid {colors['border']};
+        }}
+        QWidget#stockRoot QHeaderView::section {{
+            background: {colors['surface']};
+            color: {colors['text']};
+            padding: 6px 8px;
+            border: 1px solid {colors['border']};
+        }}
+        QWidget#inventoryRoot QHeaderView::section {{
+            background: {colors['surface']};
+            color: {colors['text']};
+            padding: 6px 8px;
+            border: 1px solid {colors['border']};
+        }}
+        /* Invoice tables same as others */
+        QWidget#invoiceRoot QTableWidget {{
+            background: {colors['background']};
+            gridline-color: {colors['border']};
+            selection-background-color: #ADD8E6;
+            selection-color: #000000;
+            border: 1px solid {colors['border']};
+        }}
+        QWidget#invoiceRoot QTableWidget::item:alternate {{
+            background: {colors['surface']};
+        }}
+        QWidget#invoiceRoot QTableWidget::item:selected {{
+            background: #ADD8E6;
+            color: #000000;
+        }}
+        QWidget#invoiceRoot QTableWidget::item:alternate:selected {{
+            background: #ADD8E6;
+            color: #000000;
+        }}
+        QWidget#invoiceRoot QHeaderView::section {{
+            background: {colors['surface']};
+            color: {colors['text']};
+            padding: 6px 8px;
+            border: 1px solid {colors['border']};
         }}
         """
         
@@ -318,8 +565,7 @@ class ThemeManager:
         
         QWidget#headerContainer {{
             background-color: {colors['primary']};
-            border: none;
-            border-radius: 0px;
+            border-bottom: 5px solid {colors['button_primary_hover']};
         }}
         
         QLabel#appName {{
@@ -366,8 +612,9 @@ class ThemeManager:
         }}
         
         QLineEdit {{
-            border: 1px solid {colors['input_border']};
-            padding: 8px;
+            border: 2px solid {colors['input_border']};
+            padding: 5px;
+            border-radius:0;
             font-size: 14px;
             font-family: {font_family};
             background-color: {colors['background']};

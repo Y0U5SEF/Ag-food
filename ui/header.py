@@ -91,7 +91,7 @@ class HeaderWidget(QWidget):
             # Scale the icon to appropriate size (24x24 to match the header height proportionally)
             scaled_pixmap = pixmap.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.admin_icon_label.setPixmap(scaled_pixmap)
-            print(f"Admin icon loaded: {icon_path}")
+            # print(f"Admin icon loaded: {icon_path}")
         else:
             # If icon not found, hide the label
             self.admin_icon_label.hide()

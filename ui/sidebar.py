@@ -24,6 +24,7 @@ class SidebarWidget(QWidget):
     NAVIGATION_ITEMS = [
         {"key": "nav.stock_management", "icon": "stock.svg"},
         {"key": "nav.invoice_generation", "icon": "invoice.svg"},
+        {"key": "nav.client_management", "icon": "clients.svg"},
         {"key": "nav.inventory_control", "icon": "inventory.svg"},
         {"key": "nav.order_processing", "icon": "order.svg"},
         {"key": "nav.supplier_management", "icon": "supplier.svg"},

@@ -62,6 +62,18 @@ if __name__ == '__main__':
     db_manager.database_error.connect(on_db_error)
     login_dialog.login_successful.connect(main_window.update_username)
     login_dialog.login_successful.connect(lambda user_data: main_window.showMaximized())
+    # Track current user for audit trail
+    def _set_db_user(user_data):
+        try:
+            if isinstance(user_data, dict) and 'full_name' in user_data:
+                db_manager.current_user = user_data['full_name']
+            elif isinstance(user_data, dict) and 'username' in user_data:
+                db_manager.current_user = user_data['username']
+            elif isinstance(user_data, str):
+                db_manager.current_user = user_data
+        except Exception:
+            pass
+    login_dialog.login_successful.connect(_set_db_user)
 
     # Start the database connection process
     db_manager.connect_db()
