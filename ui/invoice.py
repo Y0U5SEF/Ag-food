@@ -10,7 +10,349 @@ from PyQt6.QtWidgets import (
     QSpinBox, QDoubleSpinBox, QDialog, QDialogButtonBox, QSizePolicy, QGroupBox, QCheckBox, QPushButton, QAbstractItemView, QFileDialog
 )
 from PyQt6.QtWidgets import QStyle
+from PyQt6.QtGui import QIntValidator
 from i18n.language_manager import language_manager as i18n
+
+
+
+class InvoicePdfPreviewDialog(QDialog):
+    """Minimal PDF viewer used for inline invoice previews."""
+
+    def __init__(self, pdf_path: str, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        try:
+            from PyQt6.QtPdf import QPdfDocument
+            from PyQt6.QtPdfWidgets import QPdfView
+        except Exception as exc:  # pragma: no cover - depends on QtPdf availability
+            raise ImportError('QtPdf components are not available') from exc
+
+        self._pdf_doc_cls = QPdfDocument
+        self._pdf_view_cls = QPdfView
+
+        self.setWindowTitle('Invoice Preview')
+        self.setModal(True)
+        
+
+        self._valid = True
+        self._document_ready = False
+        self._page_count = 0
+
+        self.document = QPdfDocument(self)
+        self.view = QPdfView(self)
+        self.view.setDocument(self.document)
+        try:
+            self.view.setPageMode(QPdfView.PageMode.SinglePage)
+        except Exception:
+            pass
+        try:
+            self.view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
+        except Exception:
+            pass
+
+        self._nav = None
+        for attr in ('pageNavigator', 'pageNavigation'):
+            method = getattr(self.view, attr, None)
+            if callable(method):
+                try:
+                    self._nav = method()
+                except Exception:
+                    self._nav = None
+                if self._nav is not None:
+                    break
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(8)
+
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        toolbar_layout.setSpacing(6)
+
+        self.prev_btn = QToolButton(self)
+        self.prev_btn.setText('\u2b05\ufe0f')
+        self.prev_btn.setAutoRaise(True)
+        self.prev_btn.setToolTip('Previous page')
+
+        self.next_btn = QToolButton(self)
+        self.next_btn.setText('\u27a1\ufe0f')
+        self.next_btn.setAutoRaise(True)
+        self.next_btn.setToolTip('Next page')
+
+        self.page_input = QLineEdit(self)
+        self.page_input.setPlaceholderText('Page')
+        self.page_input.setFixedWidth(70)
+        self.page_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.page_input.setValidator(QIntValidator(1, 9999, self))
+        self.page_input.setEnabled(False)
+
+        self.zoom_in_btn = QToolButton(self)
+        self.zoom_in_btn.setText('\u2795')
+        self.zoom_in_btn.setAutoRaise(True)
+        self.zoom_in_btn.setToolTip('Zoom in')
+
+        self.zoom_out_btn = QToolButton(self)
+        self.zoom_out_btn.setText('\u2796')
+        self.zoom_out_btn.setAutoRaise(True)
+        self.zoom_out_btn.setToolTip('Zoom out')
+
+        self.zoom_reset_btn = QToolButton(self)
+        self.zoom_reset_btn.setText('\U0001f504')
+        self.zoom_reset_btn.setAutoRaise(True)
+        self.zoom_reset_btn.setToolTip('Reset zoom')
+
+        toolbar_layout.addWidget(self.prev_btn)
+        toolbar_layout.addWidget(self.next_btn)
+        toolbar_layout.addWidget(self.page_input)
+        toolbar_layout.addStretch(1)
+        toolbar_layout.addWidget(self.zoom_in_btn)
+        toolbar_layout.addWidget(self.zoom_out_btn)
+        toolbar_layout.addWidget(self.zoom_reset_btn)
+
+        main_layout.addLayout(toolbar_layout)
+        main_layout.addWidget(self.view, 1)
+
+        status_widget = QWidget(self)
+        status_layout = QHBoxLayout(status_widget)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(6)
+
+        self.page_status = QLabel('Page - of -', status_widget)
+        self.zoom_status = QLabel('Zoom: --', status_widget)
+        self.zoom_status.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        status_layout.addWidget(self.page_status)
+        status_layout.addStretch(1)
+        status_layout.addWidget(self.zoom_status)
+        main_layout.addWidget(status_widget)
+
+        self.prev_btn.setEnabled(False)
+        self.next_btn.setEnabled(False)
+
+        self.prev_btn.clicked.connect(self._go_previous)
+        self.next_btn.clicked.connect(self._go_next)
+        self.page_input.returnPressed.connect(self._commit_page_input)
+        self.page_input.editingFinished.connect(self._commit_page_input)
+        self.zoom_in_btn.clicked.connect(self._zoom_in)
+        self.zoom_out_btn.clicked.connect(self._zoom_out)
+        self.zoom_reset_btn.clicked.connect(self._reset_zoom)
+
+        if self._nav is not None:
+            current_signal = getattr(self._nav, 'currentPageChanged', None)
+            if current_signal is not None:
+                try:
+                    current_signal.connect(self._on_page_changed)
+                except Exception:
+                    pass
+
+        for signal_name in ('zoomFactorChanged', 'zoomModeChanged'):
+            signal = getattr(self.view, signal_name, None)
+            if signal is not None:
+                try:
+                    signal.connect(self._on_zoom_changed)
+                except Exception:
+                    pass
+
+        page_count_signal = getattr(self.document, 'pageCountChanged', None)
+        if page_count_signal is not None:
+            try:
+                page_count_signal.connect(self._on_page_count_changed)
+            except Exception:
+                pass
+
+        self.document.statusChanged.connect(self._on_document_status)
+        try:
+            self.document.load(pdf_path)
+        except Exception:
+            self._valid = False
+        self._on_document_status(self.document.status())
+
+        self.setMinimumSize(720, 520)
+        self.resize(900, 700)
+
+    @property
+    def is_valid(self) -> bool:
+        if not self._valid:
+            return False
+        if not self._document_ready:
+            return True
+        return self._page_count > 0
+
+    def _on_document_status(self, status) -> None:
+        if status == self._pdf_doc_cls.Status.Error:
+            self._valid = False
+            return
+        if status == self._pdf_doc_cls.Status.Ready:
+            self._initialize_document()
+
+    def _initialize_document(self) -> None:
+        if self._document_ready:
+            return
+        count = int(self.document.pageCount() or 0)
+        if count <= 0:
+            self._valid = False
+            return
+        self._document_ready = True
+        self._page_count = count
+        self.page_input.setEnabled(True)
+        self._set_page(0)
+        self._update_zoom_label()
+
+    def _on_page_changed(self, *_) -> None:
+        if not self._document_ready:
+            return
+        self._update_page_display()
+        self._update_nav_state()
+
+    def _on_page_count_changed(self, *_) -> None:
+        if not self._document_ready:
+            return
+        self._page_count = max(int(self.document.pageCount() or 0), 0)
+        self._update_nav_state()
+        self._update_page_display()
+
+    def _on_zoom_changed(self, *_) -> None:
+        self._update_zoom_label()
+
+    def _update_page_display(self) -> None:
+        count = self._get_page_count()
+        if count <= 0:
+            self.page_status.setText('Page - of -')
+            return
+        current = self._get_current_page()
+        self.page_status.setText(f'Page {current + 1} of {count}')
+        blocked = self.page_input.blockSignals(True)
+        self.page_input.setText(str(current + 1))
+        self.page_input.blockSignals(blocked)
+
+    def _update_nav_state(self) -> None:
+        count = self._get_page_count()
+        current = self._get_current_page()
+        enabled = self._document_ready and count > 0
+        self.prev_btn.setEnabled(enabled and current > 0)
+        self.next_btn.setEnabled(enabled and (current + 1) < count)
+
+    def _update_zoom_label(self) -> None:
+        try:
+            zoom = float(self.view.zoomFactor())
+        except Exception:
+            zoom = 1.0
+        if zoom <= 0:
+            zoom = 1.0
+        suffix = ''
+        try:
+            if self.view.zoomMode() == self._pdf_view_cls.ZoomMode.FitToWidth:
+                suffix = ' (Fit width)'
+        except Exception:
+            pass
+        percent = int(round(zoom * 100))
+        self.zoom_status.setText(f'Zoom: {percent}%{suffix}')
+
+    def _go_previous(self) -> None:
+        self._set_page(self._get_current_page() - 1)
+
+    def _go_next(self) -> None:
+        self._set_page(self._get_current_page() + 1)
+
+    def _commit_page_input(self) -> None:
+        if not self._document_ready:
+            return
+        text = self.page_input.text().strip()
+        if not text:
+            self._update_page_display()
+            return
+        try:
+            target = int(text) - 1
+        except ValueError:
+            self._update_page_display()
+            return
+        self._set_page(target)
+
+    def _set_page(self, index: int) -> None:
+        if not self._document_ready:
+            return
+        count = self._get_page_count()
+        if count <= 0:
+            return
+        index = max(0, min(index, count - 1))
+        if self._nav is not None:
+            setter = getattr(self._nav, 'setCurrentPage', None)
+            if callable(setter):
+                try:
+                    setter(index)
+                except Exception:
+                    pass
+            else:
+                jumper = getattr(self._nav, 'jump', None)
+                if callable(jumper):
+                    try:
+                        jumper(index)
+                    except Exception:
+                        pass
+        else:
+            set_page = getattr(self.view, 'setPage', None)
+            if callable(set_page):
+                try:
+                    set_page(index)
+                except Exception:
+                    pass
+        self._update_page_display()
+        self._update_nav_state()
+
+    def _zoom_in(self) -> None:
+        self._apply_zoom_scale(1.2)
+
+    def _zoom_out(self) -> None:
+        self._apply_zoom_scale(1 / 1.2)
+
+    def _apply_zoom_scale(self, factor: float) -> None:
+        try:
+            self.view.setZoomMode(self._pdf_view_cls.ZoomMode.Custom)
+        except Exception:
+            pass
+        try:
+            current = float(self.view.zoomFactor())
+        except Exception:
+            current = 1.0
+        if current <= 0:
+            current = 1.0
+        new_factor = max(0.2, min(current * factor, 5.0))
+        try:
+            self.view.setZoomFactor(new_factor)
+        except Exception:
+            pass
+        self._update_zoom_label()
+
+    def _reset_zoom(self) -> None:
+        try:
+            self.view.setZoomMode(self._pdf_view_cls.ZoomMode.FitToWidth)
+        except Exception:
+            try:
+                self.view.setZoomFactor(1.0)
+            except Exception:
+                pass
+        self._update_zoom_label()
+
+    def _get_current_page(self) -> int:
+        if self._nav is not None:
+            getter = getattr(self._nav, 'currentPage', None)
+            if callable(getter):
+                try:
+                    return int(getter())
+                except Exception:
+                    pass
+        getter = getattr(self.view, 'page', None)
+        if callable(getter):
+            try:
+                return int(getter())
+            except Exception:
+                pass
+        return 0
+
+    def _get_page_count(self) -> int:
+        try:
+            return max(int(self.document.pageCount() or 0), 0)
+        except Exception:
+            return max(self._page_count, 0)
 
 
 class InvoiceWidget(QWidget):
@@ -750,41 +1092,17 @@ class InvoiceWidget(QWidget):
 
     # ----- Inline PDF viewer (lite) -----
     def view_pdf_inline(self, pdf_path: str) -> bool:
-        """Display PDF inline using Qt WebEngine if available. Returns True if shown."""
+        """Display PDF inline using the bundled PDF viewer. Returns True if shown."""
         try:
-            from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
-            from PyQt6.QtCore import QUrl
+            dlg = InvoicePdfPreviewDialog(pdf_path, self)
+        except ImportError:
+            return False
         except Exception:
             return False
-        try:
-            dlg = QDialog(self)
-            dlg.setWindowTitle('Invoice Preview')
-            lay = QVBoxLayout(dlg)
-            # simple toolbar
-            bar = QHBoxLayout()
-            open_btn = QPushButton('Open Externally')
-            close_btn = QPushButton('Close')
-            bar.addStretch(1); bar.addWidget(open_btn); bar.addWidget(close_btn)
-            lay.addLayout(bar)
-            view = QWebEngineView(dlg)
-            view.setUrl(QUrl.fromLocalFile(pdf_path))
-            lay.addWidget(view, 1)
-            def _open_ext():
-                try:
-                    import os, subprocess
-                    if os.name == 'nt':
-                        os.startfile(pdf_path)  # type: ignore[attr-defined]
-                    else:
-                        subprocess.Popen(['xdg-open', pdf_path])
-                except Exception:
-                    pass
-            open_btn.clicked.connect(_open_ext)
-            close_btn.clicked.connect(dlg.accept)
-            dlg.resize(900, 700)
-            dlg.exec()
-            return True
-        except Exception:
+        if not getattr(dlg, 'is_valid', False):
             return False
+        dlg.exec()
+        return True
 
     # ----- i18n -----
     def retranslate_ui(self):
