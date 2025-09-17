@@ -120,6 +120,44 @@ class MainAppWindow(QMainWindow):
         general_form.addRow(self.language_label, self.language_combo)
         self.settings_tabs.addTab(self.general_tab, i18n.tr('settings.tab.general'))
         
+        # Business Information tab
+        self.business_tab = QWidget()
+        business_form = QFormLayout(self.business_tab)
+        business_form.setContentsMargins(12, 12, 12, 12)
+        business_form.setHorizontalSpacing(16)
+        business_form.setVerticalSpacing(14)
+
+        self.business_name_edit = QLineEdit()
+        self.business_address_edit = QLineEdit()
+        self.business_phone_landline_edit = QLineEdit()
+        self.business_phone_mobile_edit = QLineEdit()
+        self.business_fax_edit = QLineEdit()
+        self.business_email_edit = QLineEdit()
+        self.bank_identity_statement_edit = QLineEdit()
+        self.bank_name_edit = QLineEdit()
+        self.common_company_identifier_edit = QLineEdit()
+        self.tax_identifier_edit = QLineEdit()
+        self.trade_register_number_edit = QLineEdit()
+        self.business_patente_edit = QLineEdit()
+
+        business_form.addRow(QLabel(i18n.tr('business.name')), self.business_name_edit)
+        business_form.addRow(QLabel(i18n.tr('business.address')), self.business_address_edit)
+        business_form.addRow(QLabel(i18n.tr('business.phone_landline')), self.business_phone_landline_edit)
+        business_form.addRow(QLabel(i18n.tr('business.phone_mobile')), self.business_phone_mobile_edit)
+        business_form.addRow(QLabel(i18n.tr('business.fax')), self.business_fax_edit)
+        business_form.addRow(QLabel(i18n.tr('business.email')), self.business_email_edit)
+        business_form.addRow(QLabel(i18n.tr('business.bank_identity')), self.bank_identity_statement_edit)
+        business_form.addRow(QLabel(i18n.tr('business.bank_name')), self.bank_name_edit)
+        business_form.addRow(QLabel(i18n.tr('business.company_id')), self.common_company_identifier_edit)
+        business_form.addRow(QLabel(i18n.tr('business.tax_id')), self.tax_identifier_edit)
+        business_form.addRow(QLabel(i18n.tr('business.trade_register')), self.trade_register_number_edit)
+        business_form.addRow(QLabel(i18n.tr('business.patente')), self.business_patente_edit)
+
+        self.settings_tabs.addTab(self.business_tab, 'Business Information')
+        
+        # Load existing business info
+        self.load_business_info()
+        
         # Clients management content
         self.clients_widget = ClientsManagementWidget(self.db_manager)
 
@@ -144,6 +182,9 @@ class MainAppWindow(QMainWindow):
         # Settings signals
         self.language_combo.currentIndexChanged.connect(self.on_language_changed)
         
+        # Save business info when switching away from settings
+        self.content_stack.currentChanged.connect(self.on_content_changed)
+        
     def switch_content(self, index):
         """Switch the main content area based on navigation selection."""
         if index >= 0:  # Valid selection
@@ -160,6 +201,64 @@ class MainAppWindow(QMainWindow):
         """Show the settings panel when settings button is clicked."""
         # Switch to settings content (index 4)
         self.content_stack.setCurrentIndex(4)
+        # Reload business info when showing settings
+        self.load_business_info()
+        
+    def load_business_info(self):
+        """Load business information from database into the form fields."""
+        try:
+            business_info = self.db_manager.get_business_info()
+            if business_info:
+                self.business_name_edit.setText(business_info.get('business_name', ''))
+                self.business_address_edit.setText(business_info.get('address_line', ''))
+                self.business_phone_landline_edit.setText(business_info.get('phone_landline', ''))
+                self.business_phone_mobile_edit.setText(business_info.get('phone_mobile', ''))
+                self.business_fax_edit.setText(business_info.get('fax_number', ''))
+                self.business_email_edit.setText(business_info.get('email_address', ''))
+                self.bank_identity_statement_edit.setText(business_info.get('bank_identity_statement', ''))
+                self.bank_name_edit.setText(business_info.get('bank_name', ''))
+                self.common_company_identifier_edit.setText(business_info.get('common_company_identifier', ''))
+                self.tax_identifier_edit.setText(business_info.get('tax_identifier', ''))
+                self.trade_register_number_edit.setText(business_info.get('trade_register_number', ''))
+                self.business_patente_edit.setText(business_info.get('patente_number', ''))
+        except Exception as e:
+            print(f"Error loading business info: {e}")
+            
+    def save_business_info(self):
+        """Save business information from form fields to database."""
+        try:
+            business_info = {
+                'business_name': self.business_name_edit.text().strip(),
+                'address_line': self.business_address_edit.text().strip(),
+                'phone_landline': self.business_phone_landline_edit.text().strip(),
+                'phone_mobile': self.business_phone_mobile_edit.text().strip(),
+                'fax_number': self.business_fax_edit.text().strip(),
+                'email_address': self.business_email_edit.text().strip(),
+                'bank_identity_statement': self.bank_identity_statement_edit.text().strip(),
+                'bank_name': self.bank_name_edit.text().strip(),
+                'common_company_identifier': self.common_company_identifier_edit.text().strip(),
+                'tax_identifier': self.tax_identifier_edit.text().strip(),
+                'trade_register_number': self.trade_register_number_edit.text().strip(),
+                'patente_number': self.business_patente_edit.text().strip()
+            }
+            success = self.db_manager.update_business_info(business_info)
+            if not success:
+                QMessageBox.warning(self, "Save Error", "Failed to save business information.")
+        except Exception as e:
+            print(f"Error saving business info: {e}")
+            QMessageBox.warning(self, "Save Error", f"Error saving business information: {e}")
+            
+    def on_content_changed(self, index):
+        """Called when content stack changes. Save business info if moving away from settings."""
+        settings_index = 4  # Index of settings tab
+        if self.content_stack.currentIndex() != settings_index and index != settings_index:
+            # We're moving away from settings, save business info
+            self.save_business_info()
+            
+    def closeEvent(self, a0):
+        """Override close event to save business information before closing."""
+        self.save_business_info()
+        super().closeEvent(a0)
         
     def apply_theme(self, theme_name='light'):
         """Apply the specified theme to the entire application."""
@@ -235,6 +334,12 @@ class MainAppWindow(QMainWindow):
         tab_index = self.settings_tabs.indexOf(self.general_tab)
         if tab_index != -1:
             self.settings_tabs.setTabText(tab_index, i18n.tr('settings.tab.general'))
+        
+        # Business info tab text
+        business_tab_index = self.settings_tabs.indexOf(self.business_tab)
+        if business_tab_index != -1:
+            self.settings_tabs.setTabText(business_tab_index, i18n.tr('business.name'))
+            
         self.language_label.setText(i18n.tr('settings.language.label'))
 
         # Content placeholders

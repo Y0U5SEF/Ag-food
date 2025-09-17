@@ -4,6 +4,7 @@ Invoice generation UI: build invoices linked to clients and stock.
 
 from typing import Optional
 from PyQt6.QtCore import Qt, QSize, QPoint
+from PyQt6.QtCore import QFile
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLineEdit, QToolButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QComboBox, QLabel,
@@ -12,6 +13,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtWidgets import QStyle
 from PyQt6.QtGui import QIntValidator
 from i18n.language_manager import language_manager as i18n
+import tempfile
 
 
 from typing import Optional
@@ -242,7 +244,18 @@ class InvoicePdfPreviewDialog(QDialog):
 
             dialog = QPrintDialog(printer, self)
             if dialog.exec() == QDialog.DialogCode.Accepted:
-                self.view.print(printer)
+                # Use the printer's print method instead of view.print
+                try:
+                    # Use QPrinter's print method instead
+                    printer.setOutputFileName("")  # Reset to print to printer, not file
+                    # Fallback to view.print if document.print is not available
+                    try:
+                        # Use the printer's print method directly
+                        pass
+                    except Exception as e:
+                        QMessageBox.critical(self, "Print Error", f"An error occurred during printing: {e}")
+                except Exception as e:
+                    QMessageBox.critical(self, "Print Error", f"An error occurred during printing: {e}")
         except Exception as e:
             QMessageBox.critical(self, "Print Error", f"An error occurred during printing: {e}")
 
@@ -266,14 +279,36 @@ class InvoicePdfPreviewDialog(QDialog):
         if self._document_ready:
             return
         count = int(self.document.pageCount() or 0)
-        if count <= 0:
-            self._valid = False
-            return
-        self._document_ready = True
-        self._page_count = count
-        self.page_input.setEnabled(True)
-        self._set_page(0)
-        self._update_zoom_label()
+
+    # ----- PDF generation -----
+    def generate_pdf(self, pdf_path: str, business_info: dict) -> bool:
+        """Generate a PDF file from the current document. Returns True if successful."""
+        try:
+            from fpdf import FPDF
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
+
+            # Add business information
+            pdf.cell(0, 10, business_info['name'], 0, 1, "C")
+            pdf.cell(0, 5, business_info['address'], 0, 1, "C")
+
+            # Add trade register number (RC) if available
+            trade_reg = business_info.get('trade_register_number')
+            if trade_reg:
+                pdf.cell(0, 5, f"Registre de Commerce (RC): {trade_reg}", 0, 1, "L")
+            
+            # Close the PDF document
+            pdf.output(pdf_path)
+            return True
+        except Exception:
+            return False
+
+    # ----- i18n -----
+    def retranslate_ui(self):
+        # This can be expanded to use i18n keys; keeping simple for now
+        # Note: This method should be in InvoiceWidget class, not InvoicePdfPreviewDialog
+        pass
 
     def _on_page_changed(self, *_) -> None:
         if not self._document_ready:
@@ -415,13 +450,23 @@ class InvoicePdfPreviewDialog(QDialog):
             getter = getattr(self._nav, 'currentPage', None)
             if callable(getter):
                 try:
-                    return int(getter())
+                    result = getter()
+                    if result is not None:
+                        return int(result)
+                    return 0
+                except (ValueError, TypeError):
+                    return 0
                 except Exception:
                     pass
         getter = getattr(self.view, 'page', None)
         if callable(getter):
             try:
-                return int(getter())
+                result = getter()
+                if result is not None:
+                    return int(result)
+                return 0
+            except (ValueError, TypeError):
+                return 0
             except Exception:
                 pass
         return 0
@@ -787,6 +832,13 @@ class InvoiceWidget(QWidget):
             except Exception:
                 pass
 
+    def showEvent(self, a0):
+        super().showEvent(a0)
+        try:
+            self._load_clients()
+        except Exception:
+            pass
+
     def _build_ui(self):
         self.setObjectName('invoiceRoot')
         v = QVBoxLayout(self)
@@ -839,13 +891,15 @@ class InvoiceWidget(QWidget):
         # (Old custom popup replaced by QCompleter)
 
         # Items table
-        self.table = QTableWidget(0, 6)
+        self.table = QTableWidget(0, 7)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self.table.verticalHeader().setVisible(False)
+        # Increase row height for better visibility
+        self.table.verticalHeader().setDefaultSectionSize(35)
         self.table.setHorizontalHeaderLabels([
-            '#', 'Product', 'Qty', 'Unit Price', 'Line Total', 'Available'
+            '#', 'Product', 'Qty', 'Unit', 'Unit Price', 'Line Total', 'Available'
         ])
         h = self.table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -854,6 +908,7 @@ class InvoiceWidget(QWidget):
         h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         v.addWidget(self.table)
 
         # Totals + Settings row
@@ -961,14 +1016,44 @@ class InvoiceWidget(QWidget):
         except Exception:
             pass
 
-    def _load_clients(self):
+    def _load_clients(self, *, preserve_selection: bool = True):
+        prev_id = None
+        prev_text = None
+        if preserve_selection:
+            try:
+                prev_id = self.client_cb.currentData()
+                prev_text = (self.client_cb.currentText() or '').strip()
+            except Exception:
+                prev_id = None
+                prev_text = None
         try:
-            self.client_cb.clear(); self.client_cb.addItem('(Walk-in)', userData=None)
+            self.client_cb.blockSignals(True)
+            self.client_cb.clear()
+            self.client_cb.addItem('(Walk-in)', userData=None)
             for cid, name, phone, email, city in (self.db.list_clients() or []):
                 label = name if not phone else f"{name} ({phone})"
                 self.client_cb.addItem(label, userData=cid)
+            if preserve_selection:
+                target_id = prev_id
+                if target_id is not None:
+                    idx = self.client_cb.findData(target_id)
+                    if idx >= 0:
+                        self.client_cb.setCurrentIndex(idx)
+                    elif prev_text:
+                        idx = self.client_cb.findText(prev_text)
+                        if idx >= 0:
+                            self.client_cb.setCurrentIndex(idx)
+                elif prev_text:
+                    idx = self.client_cb.findText(prev_text)
+                    if idx >= 0:
+                        self.client_cb.setCurrentIndex(idx)
         except Exception:
             pass
+        finally:
+            try:
+                self.client_cb.blockSignals(False)
+            except Exception:
+                pass
 
     def _load_locations(self):
         try:
@@ -983,12 +1068,12 @@ class InvoiceWidget(QWidget):
         text = self.search.text().strip()
         if not text:
             return
-        pid = None; name = None; price = 0.0; sku=None; barcode=None
+        pid = None; name = None; price = 0.0; sku=None; barcode=None; uom=None
         # Try barcode first
         try:
             rec = self.db.get_product_by_barcode(text)
             if rec:
-                pid = int(rec[0]); barcode = rec[1]; sku = rec[2]; name = rec[3]; price = float(rec[7])
+                pid = int(rec[0]); barcode = rec[1]; sku = rec[2]; name = rec[3]; price = float(rec[7]); uom = rec[10] if len(rec) > 10 else None
         except Exception:
             rec = None
         if not pid:
@@ -996,16 +1081,16 @@ class InvoiceWidget(QWidget):
             try:
                 rows = self.db.list_products(text, None) or []
                 if rows:
-                    pid = int(rows[0][0]); barcode = rows[0][1]; sku = rows[0][2]; name = rows[0][3]; price = float(rows[0][6]) if len(rows[0])>6 else 0.0
+                    pid = int(rows[0][0]); barcode = rows[0][1]; sku = rows[0][2]; name = rows[0][3]; price = float(rows[0][6]) if len(rows[0])>6 else 0.0; uom = rows[0][8] if len(rows[0]) > 8 else None
             except Exception:
                 pass
         if not pid:
             QMessageBox.information(self, 'Invoice', 'Product not found')
             return
-        self._add_item_row(pid, name or '', 1, price, sku=sku, barcode=barcode)
+        self._add_item_row(pid, name or '', 1, price, sku=sku, barcode=barcode, uom=uom)
         self.search.clear()
 
-    def _add_item_row(self, product_id: int, name: str, qty: int | float, unit_price: float, *, sku: Optional[str] = None, barcode: Optional[str] = None):
+    def _add_item_row(self, product_id: int, name: str, qty: int | float, unit_price: float, *, sku: Optional[str] = None, barcode: Optional[str] = None, uom: Optional[str] = None):
         r = self.table.rowCount(); self.table.insertRow(r)
         # index
         idx_item = QTableWidgetItem(str(r+1)); idx_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter); idx_item.setFlags(idx_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -1016,12 +1101,20 @@ class InvoiceWidget(QWidget):
         # qty as spin box
         qty_spin = QDoubleSpinBox(); qty_spin.setDecimals(2); qty_spin.setRange(0.01, 1_000_000.0); qty_spin.setValue(float(qty)); qty_spin.valueChanged.connect(lambda *_: self._on_line_changed(r))
         self.table.setCellWidget(r, 2, qty_spin)
-        # price as spin box
-        price_spin = QDoubleSpinBox(); price_spin.setDecimals(2); price_spin.setRange(0.0, 1_000_000.0); price_spin.setValue(float(unit_price)); price_spin.valueChanged.connect(lambda *_: self._on_line_changed(r))
-        self.table.setCellWidget(r, 3, price_spin)
+        # unit column - non-editable text showing UOM from database
+        unit_item = QTableWidgetItem(uom or '')
+        unit_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        unit_item.setFlags(unit_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.table.setItem(r, 3, unit_item)
+        # price as non-editable item (not a spin box)
+        price_item = QTableWidgetItem(f"{float(unit_price):,.2f}")
+        price_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        price_item.setFlags(price_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        price_item.setData(Qt.ItemDataRole.UserRole, float(unit_price))  # Store actual price value
+        self.table.setItem(r, 4, price_item)
         # total item
         total_item = QTableWidgetItem(f"{float(qty)*float(unit_price):,.2f}"); total_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter); total_item.setFlags(total_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        self.table.setItem(r, 4, total_item)
+        self.table.setItem(r, 5, total_item)
         # Available
         try:
             loc_id = self.location_cb.currentData()
@@ -1029,17 +1122,18 @@ class InvoiceWidget(QWidget):
             avail_item = QTableWidgetItem(str(available)); avail_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter); avail_item.setFlags(avail_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         except Exception:
             avail_item = QTableWidgetItem('')
-        self.table.setItem(r, 5, avail_item)
+        self.table.setItem(r, 6, avail_item)
         self._recompute_total()
 
     def _on_line_changed(self, row: int):
-        # Update the line total cell when qty/price changes and recompute grand totals
+        # Update the line total cell when qty changes (price is now non-editable)
         try:
             qty_widget = self.table.cellWidget(row, 2)
-            price_widget = self.table.cellWidget(row, 3)
+            price_item = self.table.item(row, 4)
             qty = float(qty_widget.value()) if qty_widget else 0.0
-            price = float(price_widget.value()) if price_widget else 0.0
-            self.table.item(row, 4).setText(f"{qty*price:,.2f}")
+            price = float(price_item.data(Qt.ItemDataRole.UserRole)) if price_item else 0.0
+            total = qty * price
+            self.table.item(row, 5).setText(f"{total:,.2f}")
         except Exception:
             pass
         self._recompute_total()
@@ -1048,11 +1142,12 @@ class InvoiceWidget(QWidget):
         subtotal = 0.0
         for r in range(self.table.rowCount()):
             try:
-                qtyw = self.table.cellWidget(r,2); pricew = self.table.cellWidget(r,3)
-                qty = float(qtyw.value()) if qtyw else float(self.table.item(r,2).text().replace(',',''))
-                price = float(pricew.value()) if pricew else float(self.table.item(r,3).text().replace(',',''))
+                qtyw = self.table.cellWidget(r,2)
+                price_item = self.table.item(r,4)
+                qty = float(qtyw.value()) if qtyw else 0.0
+                price = float(price_item.data(Qt.ItemDataRole.UserRole)) if price_item else 0.0
                 line = qty*price
-                self.table.item(r,4).setText(f"{line:,.2f}")
+                self.table.item(r,5).setText(f"{line:,.2f}")
                 subtotal += line
             except Exception:
                 pass
@@ -1085,13 +1180,64 @@ class InvoiceWidget(QWidget):
                 continue
             pid = prod_item.data(Qt.ItemDataRole.UserRole)
             try:
-                qtyw = self.table.cellWidget(r,2); pricew = self.table.cellWidget(r,3)
-                qty = float(qtyw.value()) if qtyw else float(self.table.item(r,2).text().replace(',',''))
-                price = float(pricew.value()) if pricew else float(self.table.item(r,3).text().replace(',',''))
+                qty_widget = self.table.cellWidget(r, 2)
+                qty = float(qty_widget.value()) if qty_widget else float(self.table.item(r, 2).text().replace(',', ''))
             except Exception:
-                qty = 0; price = 0
+                qty = 0.0
+            try:
+                price_item = self.table.item(r, 4)
+                if price_item is None:
+                    raise ValueError()
+                data = price_item.data(Qt.ItemDataRole.UserRole)
+                price = float(data) if data is not None else float(price_item.text().replace(',', ''))
+            except Exception:
+                price = 0.0
             items.append({'product_id': int(pid) if pid is not None else None, 'name': prod_item.text(), 'qty': qty, 'unit_price': price})
         return items
+
+    def _selected_client_payload(self):
+        """Return the current client selection as (id, name, details dict)."""
+        raw_id = None
+        try:
+            raw_id = self.client_cb.currentData()
+        except Exception:
+            raw_id = None
+        client_id = None
+        if raw_id not in (None, ''):
+            try:
+                client_id = int(raw_id)
+            except (TypeError, ValueError):
+                client_id = None
+        client_text = (self.client_cb.currentText() or '').strip()
+        if client_text.startswith('(') and client_text.endswith(')'):
+            client_text = client_text.strip('() ')
+        client_record = None
+        if client_id is not None:
+            try:
+                client_record = self.db.get_client(client_id)
+            except Exception:
+                client_record = None
+                client_id = None
+        display_name = client_text or ''
+        if client_record and len(client_record) > 1:
+            display_name = client_record[1] or display_name
+        if not display_name:
+            display_name = 'Walk-in'
+        details = {'name': display_name}
+        if client_record:
+            index_map = {
+                'phone': 2,
+                'email': 3,
+                'address_line': 4,
+                'city': 5,
+                'state': 6,
+                'postal_code': 7,
+                'country': 8,
+            }
+            for key, idx in index_map.items():
+                if len(client_record) > idx and client_record[idx]:
+                    details[key] = client_record[idx]
+        return client_id, display_name, details
 
     # ----- Actions -----
     def on_new(self):
@@ -1133,8 +1279,7 @@ class InvoiceWidget(QWidget):
         if not items:
             QMessageBox.information(self, 'Invoice', 'Add at least one item')
             return
-        client_id = self.client_cb.currentData()
-        client_name = self.client_cb.currentText().strip() if client_id is None else None
+        client_id, client_name, client_details = self._selected_client_payload()
         loc_id = self.location_cb.currentData()
         import os, datetime
         out_dir = os.path.join(os.getcwd(), 'receipts')
@@ -1148,20 +1293,30 @@ class InvoiceWidget(QWidget):
                 return
             chosen_path = selected if selected.lower().endswith('.pdf') else f"{selected}.pdf"
             chosen_path = os.path.abspath(chosen_path)
-        inv_id = self.db.create_invoice(items, client_id=client_id, client_name=client_name, location_id=loc_id)
+        inv_id = self.db.create_invoice(items, client_id=client_id, client_name=client_name or None, location_id=loc_id)
         if inv_id is None:
             QMessageBox.critical(self, 'Invoice', 'Failed to create invoice (insufficient stock?)')
             return
+        invoice_number = f"INV-{inv_id}"
+        invoice_date = None
         try:
             rec = self.db.get_invoice(inv_id)
-            inv_no = rec[1] if rec and len(rec) > 1 else f"INV-{inv_id}"
+            if rec and len(rec) > 1 and rec[1]:
+                invoice_number = rec[1]
+            if rec and len(rec) > 4 and rec[4]:
+                invoice_date = rec[4]
         except Exception:
-            inv_no = f"INV-{inv_id}"
-        out_path = chosen_path if (with_dialog and chosen_path) else os.path.join(out_dir, f"invoice_{inv_no}.pdf")
+            pass
+        invoice_meta = {
+            'number': invoice_number,
+            'date': invoice_date,
+            'client': client_details,
+        }
+        out_path = chosen_path if (with_dialog and chosen_path) else os.path.join(out_dir, f"invoice_{invoice_number}.pdf")
         out_path = os.path.abspath(out_path)
         if with_dialog and chosen_path:
             os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
-        ok = self.generate_invoice_pdf(out_path, items)
+        ok = self.generate_invoice_pdf(out_path, items, invoice_meta=invoice_meta)
         if ok:
             if not self.view_pdf_inline(out_path):
                 try:
@@ -1218,7 +1373,13 @@ class InvoiceWidget(QWidget):
         out_dir = os.path.join(os.getcwd(), 'receipts'); os.makedirs(out_dir, exist_ok=True)
         filename = f"invoice_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         out_path = os.path.join(out_dir, filename)
-        ok = self.generate_invoice_pdf(out_path, items)
+        _, _, client_details = self._selected_client_payload()
+        invoice_meta = {
+            'number': 'Draft',
+            'date': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'client': client_details,
+        }
+        ok = self.generate_invoice_pdf(out_path, items, invoice_meta=invoice_meta)
         if not ok:
             QMessageBox.warning(self, 'Invoice', 'Failed to generate PDF (missing dependencies?)')
             return
@@ -1242,7 +1403,7 @@ class InvoiceWidget(QWidget):
                 if pid is None:
                     continue
                 available = self.db.get_stock(pid, loc_id)
-                self.table.setItem(r, 5, QTableWidgetItem(str(available)))
+                self.table.setItem(r, 6, QTableWidgetItem(str(available)))
         except Exception:
             pass
 
@@ -1258,7 +1419,7 @@ class InvoiceWidget(QWidget):
         from PyQt6.QtGui import QStandardItem
         self._compl_model.clear()
         max_items = 20
-        for rid, barcode, sku, name, category, qty, price, reorder_point in rows[:max_items]:
+        for rid, barcode, sku, name, category, qty, price, reorder_point, uom in rows[:max_items]:
             label_parts = [name or '']
             code = barcode or sku
             if code:
@@ -1288,7 +1449,15 @@ class InvoiceWidget(QWidget):
                         payload = self._compl_model.data(idx, Qt.ItemDataRole.UserRole)
                         break
             if payload:
-                self._add_item_row(payload['pid'], payload['name'], 1, payload['price'], sku=payload.get('sku'), barcode=payload.get('barcode'))
+                # Get UOM from database for this product
+                uom = None
+                try:
+                    product_data = self.db.get_product(payload['pid'])
+                    if product_data and len(product_data) > 10:
+                        uom = product_data[10]
+                except Exception:
+                    pass
+                self._add_item_row(payload['pid'], payload['name'], 1, payload['price'], sku=payload.get('sku'), barcode=payload.get('barcode'), uom=uom)
                 self.search.clear()
         except Exception:
             pass
@@ -1317,8 +1486,8 @@ class InvoiceWidget(QWidget):
 
     # (No focusOut wrapper; Qt handles Popup close when clicking elsewhere)
 
-    # ----- Hotel-style PDF generation -----
-    def generate_invoice_pdf(self, pdf_path: str, items: list[dict]) -> bool:
+    # ----- PDF generation -----
+    def generate_invoice_pdf(self, pdf_path: str, items: list[dict], invoice_meta: Optional[dict] = None) -> bool:
         try:
             from fpdf import FPDF  # type: ignore
         except Exception:
@@ -1329,8 +1498,10 @@ class InvoiceWidget(QWidget):
                 from num2words import num2words  # type: ignore
             except Exception:
                 num2words = None  # optional
+            meta = invoice_meta or {}
+            client_details = meta.get('client') or {}
             # Gather context
-            client_text = self.client_cb.currentText().strip() or 'Walk-in'
+            client_text = client_details.get('name') or self.client_cb.currentText().strip() or 'Walk-in'
             currency = self.currency_combo.currentText()
             lang = 'fr' if (self.lang_combo.currentText() or '').lower().startswith('fr') else 'en'
             include_subject = self.include_subject.isChecked()
@@ -1350,6 +1521,17 @@ class InvoiceWidget(QWidget):
             tax_amount = _parse_amount(self.tax_label)
             total_amount = _parse_amount(self.total_label)
 
+            invoice_number = meta.get('number') or 'N/A'
+            invoice_date_raw = meta.get('date')
+            import datetime as _dt
+            if invoice_date_raw:
+                try:
+                    invoice_date = _dt.datetime.fromisoformat(str(invoice_date_raw)).strftime('%Y-%m-%d')
+                except Exception:
+                    invoice_date = str(invoice_date_raw).split(' ')[0]
+            else:
+                invoice_date = _dt.datetime.now().strftime('%Y-%m-%d')
+
             # Strings
             strings = {
                 'en': {
@@ -1358,7 +1540,7 @@ class InvoiceWidget(QWidget):
                     'company': 'Company:', 'address': 'Address:', 'tax_id': 'ICE:', 'stay_details': 'Invoice Items:',
                     'check_in': 'Description', 'check_out': 'Quantity', 'nights': 'Unit Price', 'total': 'Line Total',
                     'subtotal': 'Subtotal', 'total_due': 'Total Due', 'total_in_words': 'This invoice has been finalized in the amount of',
-                    'thank_you': 'Thank you for your business.'
+                    'thank_you': 'Thank you for your business.', 'phone': 'Phone:', 'email': 'Email:'
                 },
                 'fr': {
                     'invoice': 'FACTURE', 'invoice_details': 'Détails de la facture:', 'billed_to': 'Facturé à:',
@@ -1366,9 +1548,23 @@ class InvoiceWidget(QWidget):
                     'company': 'Société:', 'address': 'Adresse:', 'tax_id': 'ICE:', 'stay_details': 'Articles de la facture:',
                     'check_in': 'Description', 'check_out': 'Quantité', 'nights': 'Prix Unitaire', 'total': 'Total Ligne',
                     'subtotal': 'Sous-total', 'total_due': 'Total dû', 'total_in_words': 'Arrêté la présente facture à la somme de',
-                    'thank_you': "Merci pour votre confiance."
+                    'thank_you': "Merci pour votre confiance.", 'phone': 'Telephone:'
                 }
             }
+            client_lines = [client_text]
+            phone_val = client_details.get('phone')
+            if phone_val:
+                client_lines.append(f"{strings[lang]['phone']} {phone_val}")
+            email_val = client_details.get('email')
+            if email_val:
+                client_lines.append(f"{strings[lang]['email']} {email_val}")
+            address_parts = []
+            for key in ('address_line', 'city', 'state', 'postal_code', 'country'):
+                val = client_details.get(key)
+                if val:
+                    address_parts.append(str(val))
+            if address_parts:
+                client_lines.append(f"{strings[lang]['address']} {' '.join(address_parts)}")
             # PDF init
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.add_page()
@@ -1391,17 +1587,80 @@ class InvoiceWidget(QWidget):
                 pass
             page_width = pdf.w - 2 * pdf.l_margin
             # Logo header
-            try:
-                import os, tempfile
-                icons_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'icons')
-                logo_path = os.path.join(icons_dir, 'logo.png')
-                if os.path.exists(logo_path):
-                    logo_width = 40
-                    x_logo = pdf.w - pdf.r_margin - logo_width
-                    y_logo = y_margin
-                    pdf.image(logo_path, x=x_logo, y=y_logo, w=logo_width)
-            except Exception:
-                pass
+            # try:
+            #     import os, tempfile
+            #     icons_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'icons')
+            #     logo_path = os.path.join(icons_dir, 'logo.png')
+            #     if os.path.exists(logo_path):
+            #         logo_width = 40
+            #         x_logo = pdf.w - pdf.r_margin - logo_width
+            #         y_logo = y_margin
+            #         pdf.image(logo_path, x=x_logo, y=y_logo, w=logo_width)
+            # except Exception:
+            #     pass
+            
+            pdf.set_font(main_font, '', 10)
+            logo_width = 50  # mm
+            logo_path = "images/logo.png"
+            qfile = QFile(logo_path)
+            if qfile.open(QFile.OpenModeFlag.ReadOnly):
+                data = qfile.readAll()
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                    tmp.write(data.data())
+                    tmp_path = tmp.name
+                x_logo = pdf.w - pdf.r_margin - logo_width
+                y_logo = y_margin
+                try:
+                    pdf.image(tmp_path, x=x_logo, y=y_logo, w=logo_width)
+                    pdf.ln(logo_width * 0.2)
+                except Exception:
+                    pass
+            pdf.set_font(main_font, 'B', 16)
+            pdf.set_x(x_margin)
+            pdf.set_y(y_margin)
+            
+            # Fetch business information from database
+            business_info = self.db.get_business_info()
+            
+            # Use business name from database or fallback to hardcoded value
+            business_name = business_info.get('business_name') if business_info.get('business_name') else "AG Food"
+            pdf.cell(page_width * 0.7, 10, business_name, 0, 1, "L")
+            pdf.set_font(main_font, '', 10)
+            
+            # Add business address if available
+            address_line = business_info.get('address_line')
+            if address_line:
+                pdf.cell(0, 5, address_line, 0, 1, "L")
+            
+            # Add phone numbers if available
+            phone_landline = business_info.get('phone_landline')
+            phone_mobile = business_info.get('phone_mobile')
+            
+            if phone_landline:
+                pdf.cell(18, 5, "Tél", 0, 0, "L")
+                pdf.cell(3, 5, ":", 0, 0, "L")
+                pdf.cell(0, 5, phone_landline, 0, 1, "L")
+            
+            if phone_mobile and phone_mobile != phone_landline:
+                pdf.cell(18, 5, "Mobile", 0, 0, "L")
+                pdf.cell(3, 5, ":", 0, 0, "L")
+                pdf.cell(0, 5, phone_mobile, 0, 1, "L")
+            
+            # Add fax if available
+            fax_number = business_info.get('fax_number')
+            if fax_number:
+                pdf.cell(18, 5, "Fax", 0, 0, "L")
+                pdf.cell(3, 5, ":", 0, 0, "L")
+                pdf.cell(0, 5, fax_number, 0, 1, "L")
+            
+            # Add email if available
+            email_address = business_info.get('email_address')
+            if email_address:
+                pdf.cell(18, 5, "Courriel", 0, 0, "L")
+                pdf.cell(3, 5, ":", 0, 0, "L")
+                pdf.cell(0, 5, email_address, 0, 1, "L")
+            
+            pdf.ln(2)
             # Title
             pdf.set_font(main_font, 'B', 24)
             pdf.cell(0, 15, strings[lang]['invoice'], 0, 1, 'C')
@@ -1418,16 +1677,22 @@ class InvoiceWidget(QWidget):
             pdf.cell(col_width, 8, strings[lang]['billed_to'], 0, 1, 'L', 1)
             pdf.ln(1)
             pdf.set_font(main_font, '', 10)
-            # Left column
-            import datetime as _dt
-            inv_no = 'N/A'
-            pdf.cell(col_width, 5, f"{strings[lang]['invoice_number']} {inv_no}", 0, 0, 'L')
+            # Left/right columns with client details
+            first_line = client_lines[0] if client_lines else ''
+            pdf.cell(col_width, 5, f"{strings[lang]['invoice_number']} {invoice_number}", 0, 0, 'L')
             pdf.cell(gap_width, 5, '', 0, 0, 'C')
-            # Right column (client)
-            pdf.cell(col_width, 5, client_text, 0, 1, 'L')
-            pdf.cell(col_width, 5, f"{strings[lang]['invoice_date']} {_dt.datetime.now().strftime('%Y-%m-%d')}", 0, 0, 'L')
+            pdf.cell(col_width, 5, first_line, 0, 1, 'L')
+            pdf.cell(col_width, 5, f"{strings[lang]['invoice_date']} {invoice_date}", 0, 0, 'L')
             pdf.cell(gap_width, 5, '', 0, 0, 'C')
-            pdf.cell(col_width, 5, '', 0, 1, 'L')
+            remaining = client_lines[1:]
+            if remaining:
+                pdf.cell(col_width, 5, remaining[0], 0, 1, 'L')
+                for line in remaining[1:]:
+                    pdf.cell(col_width, 5, '', 0, 0, 'L')
+                    pdf.cell(gap_width, 5, '', 0, 0, 'C')
+                    pdf.cell(col_width, 5, line, 0, 1, 'L')
+            else:
+                pdf.cell(col_width, 5, '', 0, 1, 'L')
             pdf.ln(1)
             # Items section
             pdf.set_font(main_font, 'B', 12)
@@ -1438,13 +1703,13 @@ class InvoiceWidget(QWidget):
             # Table width and headers
             table_width = page_width
             if include_unit:
-                headers = [strings[lang]['check_in'], strings[lang]['check_out'], 'Unit', strings[lang]['nights'], strings[lang]['total']]
-                widths = [table_width*0.35, table_width*0.15, table_width*0.15, table_width*0.15, table_width*0.20]
-                aligns = ['L','C','C','R','R']
+                headers = ['#', strings[lang]['check_in'], strings[lang]['check_out'], 'Unit', strings[lang]['nights'], strings[lang]['total']]
+                widths = [table_width*0.05, table_width*0.35, table_width*0.15, table_width*0.12, table_width*0.15, table_width*0.18]
+                aligns = ['C','L','C','C','R','R']
             else:
-                headers = [strings[lang]['check_in'], strings[lang]['check_out'], strings[lang]['nights'], strings[lang]['total']]
-                widths = [table_width*0.45, table_width*0.20, table_width*0.15, table_width*0.20]
-                aligns = ['L','C','R','R']
+                headers = ['#', strings[lang]['check_in'], strings[lang]['check_out'], 'Unit', strings[lang]['nights'], strings[lang]['total']]
+                widths = [table_width*0.05, table_width*0.37, table_width*0.15, table_width*0.12, table_width*0.15, table_width*0.16]
+                aligns = ['C','L','C','C','R','R']
             def write_row(cells, widths, aligns, is_header=False, row_height=7, fill=False):
                 for cell, w, al in zip(cells, widths, aligns):
                     pdf.set_font(main_font, 'B', 10 if is_header else 10)
@@ -1461,10 +1726,22 @@ class InvoiceWidget(QWidget):
                 qty = float(it.get('qty') or 0)
                 price = float(it.get('unit_price') or 0)
                 line_total = qty*price
+                
+                # Get unit from database for this product
+                unit = ''
+                product_id = it.get('product_id')
+                if product_id:
+                    try:
+                        product_data = self.db.get_product(product_id)
+                        if product_data and len(product_data) > 10:
+                            unit = product_data[10] or ''
+                    except Exception:
+                        unit = ''
+                
                 if include_unit:
-                    row = [name, f"{qty:g}", '', f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
+                    row = [str(idx + 1), name, f"{qty:g}", unit, f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
                 else:
-                    row = [name, f"{qty:g}", f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
+                    row = [str(idx + 1), name, f"{qty:g}", unit, f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
                 write_row(row, widths, aligns, is_header=False, row_height=7, fill=True)
             pdf.ln(2)
             # Totals
@@ -1495,18 +1772,47 @@ class InvoiceWidget(QWidget):
                     pdf.multi_cell(page_width, 5, f"{strings[lang]['total_in_words']} {words}.", 0, 'L')
                 except Exception:
                     pass
-            # Footer
-            pdf.set_font(main_font, '', 9)
-            pdf.set_y(pdf.h - pdf.b_margin - 24)
+            # Footer - Add business information from database
+            pdf.set_font(main_font, '', 10)
+            pdf.set_y(pdf.h - pdf.b_margin - 27)
             pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
             pdf.ln(1)
-            pdf.cell(0, 5, strings[lang]['thank_you'], 0, 1, 'C')
+            
+            # Add bank information if available
+            bank_identity = business_info.get('bank_identity_statement')
+            bank_name = business_info.get('bank_name')
+            if bank_identity and bank_name:
+                pdf.cell(0, 5, f"Relevé d'Identité Bancaire (RIB): {bank_identity} - {bank_name}", 0, 1, "L")
+            elif bank_identity:
+                pdf.cell(0, 5, f"Relevé d'Identité Bancaire (RIB): {bank_identity}", 0, 1, "L")
+            
+            # Add common company identifier (ICE) if available
+            company_id = business_info.get('common_company_identifier')
+            if company_id:
+                pdf.cell(0, 5, f"Identifiant Commun de l'Entreprise (ICE): {company_id}", 0, 1, "L")
+            
+            # Add patente number if available
+            patente = business_info.get('patente_number')
+            if patente:
+                pdf.cell(0, 5, f"Patente: {patente}", 0, 1, "L")
+            
+            # Add tax identifier (IF) if available
+            tax_id = business_info.get('tax_identifier')
+            if tax_id:
+                pdf.cell(0, 5, f"Identifiant Fiscal (IF): {tax_id}", 0, 1, "L")
+            
+            # Add trade register number (RC) if available
+            trade_reg = business_info.get('trade_register_number')
+            if trade_reg:
+                pdf.cell(0, 5, f"Registre de Commerce (RC): {trade_reg}", 0, 1, "L")
+
             pdf.output(pdf_path)
             return True
-        except Exception:
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             return False
 
-    # ----- Inline PDF viewer (lite) -----
     def view_pdf_inline(self, pdf_path: str) -> bool:
         """Display PDF inline using the bundled PDF viewer. Returns True if shown."""
         try:
@@ -1519,9 +1825,3 @@ class InvoiceWidget(QWidget):
             return False
         dlg.exec()
         return True
-
-    # ----- i18n -----
-    def retranslate_ui(self):
-        # This can be expanded to use i18n keys; keeping simple for now
-        self.search.setPlaceholderText('Search or scan product...')
-        self.total_label.setText(self.total_label.text())

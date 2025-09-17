@@ -61,6 +61,10 @@ class ClientDialog(QDialog):
         v.addWidget(btns)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
+        
+        # Dialog size configuration - adjust these values to change dialog dimensions
+        self.setMinimumWidth(450)  # Minimum width: 450px for comfortable form layout
+        self.resize(500, 400)      # Default width: 500px, height: 400px
 
     def values(self) -> dict:
         return {

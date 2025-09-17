@@ -129,6 +129,20 @@ class LanguageManager:
                 'clients.msg.failed_update': 'Failed to update client (duplicate email?)',
                 'clients.msg.failed_delete_in_use': 'Cannot delete a client with invoices or payments',
                 'clients.msg.failed_payment': 'Failed to record payment',
+                
+                # Business Information
+                'business.name': 'Business Name',
+                'business.address': 'Business Address',
+                'business.phone_landline': 'Landline Phone',
+                'business.phone_mobile': 'Mobile Phone',
+                'business.fax': 'Fax',
+                'business.email': 'Email',
+                'business.bank_identity': 'Bank Identity Statement',
+                'business.bank_name': 'Bank Name',
+                'business.company_id': 'Common Company Identifier',
+                'business.tax_id': 'Tax Identifier',
+                'business.patente': 'Patente Number',
+                'business.trade_register': 'Trade Register Number',
             },
             'fr': {
                 'app.window_title': 'AG Food - Gestion de Stock et Factures',
@@ -209,6 +223,20 @@ class LanguageManager:
                 'msg.failed_adjust': 'Échec de l’ajustement du stock',
                 'msg.confirm': 'Confirmer',
                 'msg.confirm_delete': 'Supprimer le produit sélectionné ?',
+                
+                # Business Information
+                'business.name': 'Nom de l\'entreprise',
+                'business.address': 'Adresse de l\'entreprise',
+                'business.phone_landline': 'Téléphone fixe',
+                'business.phone_mobile': 'Téléphone mobile',
+                'business.fax': 'Fax',
+                'business.email': 'Courriel',
+                'business.bank_identity': 'Relevé d\'identité bancaire',
+                'business.bank_name': 'Nom de la banque',
+                'business.company_id': 'Identifiant commun de l\'entreprise',
+                'business.tax_id': 'Identifiant fiscal',
+                'business.patente': 'Numéro de patente',
+                'business.trade_register': 'Numéro de registre du commerce',
             },
             'ar': {
                 'app.window_title': 'AG Food - إدارة المخزون والفواتير',
@@ -289,6 +317,20 @@ class LanguageManager:
                 'msg.failed_adjust': 'فشل تعديل المخزون',
                 'msg.confirm': 'تأكيد',
                 'msg.confirm_delete': 'هل تريد حذف المنتج المحدد؟',
+                
+                # Business Information
+                'business.name': '??? ????',
+                'business.address': '???? ?????',
+                'business.phone_landline': '???? ?????',
+                'business.phone_mobile': '???? ???',
+                'business.fax': '????',
+                'business.email': '??? ?????',
+                'business.bank_identity': '??? ????? ?????',
+                'business.bank_name': '??? ???',
+                'business.company_id': '????? ?????? ????',
+                'business.tax_id': '????? ?????',
+                'business.patente': '??? ?????',
+                'business.trade_register': '??? ??????? ?????',
             },
         }
 

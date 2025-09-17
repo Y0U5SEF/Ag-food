@@ -132,6 +132,25 @@ class DatabaseManager(QObject):
                 )
             ''')
             
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS business_info (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    business_name TEXT,
+                    address_line TEXT,
+                    phone_landline TEXT,
+                    phone_mobile TEXT,
+                    fax_number TEXT,
+                    email_address TEXT,
+                    bank_identity_statement TEXT,
+                    bank_name TEXT,
+                    common_company_identifier TEXT,
+                    tax_identifier TEXT,
+                    trade_register_number TEXT,
+                    patente_number TEXT
+                )
+            ''')
+
+            
             # Stock movements (transactional data)
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS stock_movements (
@@ -208,6 +227,7 @@ class DatabaseManager(QObject):
             self._add_default_user()
             # Ensure new columns exist if upgrading from older schema
             self._ensure_products_schema()
+            self._ensure_business_info_schema()
             
         except sqlite3.Error as e:
             error_message = f"Error creating tables: {e}"
@@ -293,6 +313,35 @@ class DatabaseManager(QObject):
         except sqlite3.Error as e:
             print(f"Error ensuring products schema: {e}")
 
+    def _ensure_business_info_schema(self):
+        """Ensure business_info table contains the latest optional columns."""
+        try:
+            self.cursor.execute("PRAGMA table_info(business_info)")
+            cols = [row[1] for row in self.cursor.fetchall()]
+            statements = []
+            if 'address_line' not in cols:
+                statements.append("ALTER TABLE business_info ADD COLUMN address_line TEXT")
+            if 'phone_landline' not in cols:
+                statements.append("ALTER TABLE business_info ADD COLUMN phone_landline TEXT")
+            if 'phone_mobile' not in cols:
+                statements.append("ALTER TABLE business_info ADD COLUMN phone_mobile TEXT")
+            if 'fax_number' not in cols:
+                statements.append("ALTER TABLE business_info ADD COLUMN fax_number TEXT")
+            if 'email_address' not in cols:
+                statements.append("ALTER TABLE business_info ADD COLUMN email_address TEXT")
+            if 'patente_number' not in cols:
+                statements.append("ALTER TABLE business_info ADD COLUMN patente_number TEXT")
+            for stmt in statements:
+                try:
+                    self.cursor.execute(stmt)
+                except sqlite3.Error:
+                    pass
+            if statements:
+                self.conn.commit()
+        except sqlite3.Error as e:
+            print(f"DB error ensuring business_info schema: {e}")
+
+
     def _add_default_user(self):
         """Adds a default admin user if the users table is empty."""
         try:
@@ -356,22 +405,22 @@ class DatabaseManager(QObject):
                 like = f"%{search}%"
                 if location_id is None:
                     self.cursor.execute(
-                        "SELECT id, barcode, sku, name, category, current_stock_quantity, price, reorder_point FROM products WHERE name LIKE ? OR description LIKE ? OR barcode LIKE ? OR sku LIKE ? OR category LIKE ? ORDER BY name ASC",
+                        "SELECT id, barcode, sku, name, category, current_stock_quantity, price, reorder_point, uom FROM products WHERE name LIKE ? OR description LIKE ? OR barcode LIKE ? OR sku LIKE ? OR category LIKE ? ORDER BY name ASC",
                         (like, like, like, like, like),
                     )
                 else:
                     self.cursor.execute(
-                        "SELECT id, barcode, sku, name, category, (SELECT COALESCE(SUM(quantity),0) FROM stock_movements sm WHERE sm.product_id = products.id AND sm.location_id = ?) AS qty, price, reorder_point FROM products WHERE name LIKE ? OR description LIKE ? OR barcode LIKE ? OR sku LIKE ? OR category LIKE ? ORDER BY name ASC",
+                        "SELECT id, barcode, sku, name, category, (SELECT COALESCE(SUM(quantity),0) FROM stock_movements sm WHERE sm.product_id = products.id AND sm.location_id = ?) AS qty, price, reorder_point, uom FROM products WHERE name LIKE ? OR description LIKE ? OR barcode LIKE ? OR sku LIKE ? OR category LIKE ? ORDER BY name ASC",
                         (location_id, like, like, like, like, like),
                     )
             else:
                 if location_id is None:
                     self.cursor.execute(
-                        "SELECT id, barcode, sku, name, category, current_stock_quantity, price, reorder_point FROM products ORDER BY name ASC"
+                        "SELECT id, barcode, sku, name, category, current_stock_quantity, price, reorder_point, uom FROM products ORDER BY name ASC"
                     )
                 else:
                     self.cursor.execute(
-                        "SELECT id, barcode, sku, name, category, (SELECT COALESCE(SUM(quantity),0) FROM stock_movements sm WHERE sm.product_id = products.id AND sm.location_id = ?) AS qty, price, reorder_point FROM products ORDER BY name ASC",
+                        "SELECT id, barcode, sku, name, category, (SELECT COALESCE(SUM(quantity),0) FROM stock_movements sm WHERE sm.product_id = products.id AND sm.location_id = ?) AS qty, price, reorder_point, uom FROM products ORDER BY name ASC",
                         (location_id,),
                     )
             rows = self.cursor.fetchall()
@@ -954,6 +1003,88 @@ class DatabaseManager(QObject):
         except sqlite3.Error as e:
             print(f"DB error creating invoice: {e}")
             return None
+
+    # -------- Business Information API --------
+    def get_business_info(self):
+        """Get business information. Returns a dictionary with all business info fields."""
+        try:
+            self.cursor.execute("""
+                SELECT business_name, address_line, phone_landline, phone_mobile, fax_number, email_address,
+                       bank_identity_statement, bank_name, common_company_identifier, tax_identifier,
+                       trade_register_number, patente_number
+                FROM business_info WHERE id = 1""")
+            row = self.cursor.fetchone()
+            if row:
+                return {
+                    'business_name': row[0],
+                    'address_line': row[1],
+                    'phone_landline': row[2],
+                    'phone_mobile': row[3],
+                    'fax_number': row[4],
+                    'email_address': row[5],
+                    'bank_identity_statement': row[6],
+                    'bank_name': row[7],
+                    'common_company_identifier': row[8],
+                    'tax_identifier': row[9],
+                    'trade_register_number': row[10],
+                    'patente_number': row[11]
+                }
+            return {}
+        except sqlite3.Error as e:
+            print(f"DB error getting business info: {e}")
+            return {}
+
+    def update_business_info(self, business_info: dict) -> bool:
+        """Update business information. Returns True on success."""
+        try:
+            self.cursor.execute("SELECT COUNT(*) FROM business_info WHERE id = 1")
+            exists = self.cursor.fetchone()[0] > 0
+
+            if exists:
+                self.cursor.execute("""
+                    UPDATE business_info 
+                    SET business_name = ?, address_line = ?, phone_landline = ?, phone_mobile = ?,
+                        fax_number = ?, email_address = ?, bank_identity_statement = ?, bank_name = ?,
+                        common_company_identifier = ?, tax_identifier = ?, trade_register_number = ?,
+                        patente_number = ?
+                    WHERE id = 1""",
+                    (business_info.get('business_name'),
+                     business_info.get('address_line'),
+                     business_info.get('phone_landline'),
+                     business_info.get('phone_mobile'),
+                     business_info.get('fax_number'),
+                     business_info.get('email_address'),
+                     business_info.get('bank_identity_statement'),
+                     business_info.get('bank_name'),
+                     business_info.get('common_company_identifier'),
+                     business_info.get('tax_identifier'),
+                     business_info.get('trade_register_number'),
+                     business_info.get('patente_number')))
+            else:
+                self.cursor.execute("""
+                    INSERT INTO business_info 
+                    (id, business_name, address_line, phone_landline, phone_mobile, fax_number, email_address,
+                     bank_identity_statement, bank_name, common_company_identifier, tax_identifier,
+                     trade_register_number, patente_number)
+                    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (business_info.get('business_name'),
+                     business_info.get('address_line'),
+                     business_info.get('phone_landline'),
+                     business_info.get('phone_mobile'),
+                     business_info.get('fax_number'),
+                     business_info.get('email_address'),
+                     business_info.get('bank_identity_statement'),
+                     business_info.get('bank_name'),
+                     business_info.get('common_company_identifier'),
+                     business_info.get('tax_identifier'),
+                     business_info.get('trade_register_number'),
+                     business_info.get('patente_number')))
+
+            self.conn.commit()
+            return True
+        except sqlite3.Error as e:
+            print(f"DB error updating business info: {e}")
+            return False
 
     def list_invoices(self, query: Optional[str] = None):
         try:

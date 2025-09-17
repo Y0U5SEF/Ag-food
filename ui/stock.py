@@ -397,7 +397,7 @@ class StockManagementWidget(QWidget):
         loc_id = self.location_combo.currentData()
         rows = self.db.list_products(query if query else None, loc_id)
         self.table.setRowCount(0)
-        for rid, barcode, sku, name, category, qty, price, reorder_point in rows:
+        for rid, barcode, sku, name, category, qty, price, reorder_point, uom in rows:
             r = self.table.rowCount()
             self.table.insertRow(r)
             # Index and hidden ID
@@ -841,7 +841,7 @@ class StockManagementWidget(QWidget):
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents); h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         # populate with current rows
         rows = self.db.list_products(None, loc_id)
-        for pid, barcode, name, desc, qty, price in rows:
+        for pid, barcode, sku, name, category, qty, price, reorder_point, uom in rows:
             r = table.rowCount(); table.insertRow(r)
             table.setItem(r, 0, QTableWidgetItem(str(pid)))
             table.setItem(r, 1, QTableWidgetItem(name))
@@ -873,10 +873,10 @@ class StockManagementWidget(QWidget):
             import csv
             with open(path, 'w', newline='', encoding='utf-8') as f:
                 w = csv.writer(f)
-                w.writerow(["ID", "Barcode", "Name", "Description", "Expiry", "Quantity", "Price"]) 
-                for pid, barcode, name, desc, qty, price in rows:
+                w.writerow(["ID", "Barcode", "Name", "Category", "Expiry", "Quantity", "Price"]) 
+                for pid, barcode, sku, name, category, qty, price, reorder_point, uom in rows:
                     exp, _status = self.db.get_earliest_expiry(pid)
-                    w.writerow([pid, barcode or '', name, desc or '', exp or '', qty, f"{price:.2f}"])
+                    w.writerow([pid, barcode or '', name, category or '', exp or '', qty, f"{price:.2f}"])
             QMessageBox.information(self, "Export", "Export completed")
         except Exception as e:
             QMessageBox.critical(self, "Export", f"Failed to export: {e}")
@@ -890,7 +890,7 @@ class StockManagementWidget(QWidget):
         data = self.db.get_product(pid)
         if not data:
             return
-        (_id, barcode, sku, name, desc, category, qty, price, rop, supplier_id) = data
+        (_id, barcode, sku, name, desc, category, qty, price, rop, supplier_id, uom) = data
         dlg = QDialog(self)
         dlg.setWindowTitle("Product Details")
         v = QVBoxLayout(dlg)
