@@ -14,6 +14,8 @@ from PyQt6.QtWidgets import QStyle
 from PyQt6.QtGui import QIntValidator
 from i18n.language_manager import language_manager as i18n
 import tempfile
+import arabic_reshaper
+from bidi.algorithm import get_display
 
 
 from typing import Optional
@@ -1551,7 +1553,7 @@ class InvoiceWidget(QWidget):
                 'en': {
                     'invoice': 'INVOICE', 'invoice_details': 'Invoice Details:', 'billed_to': 'Billed To:',
                     'invoice_number': 'Invoice Number:', 'invoice_date': 'Invoice Date:', 'due_date': 'Due Date:',
-                    'company': 'Company:', 'address': 'Address:', 'tax_id': 'ICE:', 'stay_details': 'Invoice Items:',
+                    'company': 'Company:', 'address': 'Address:', 'tax_id': 'ICE:', 'item_details': 'Invoice Items:',
                     'check_in': 'Description', 'check_out': 'Quantity', 'nights': 'Unit Price', 'total': 'Line Total',
                     'subtotal': 'Subtotal', 'total_due': 'Total Due', 'total_in_words': 'This invoice has been finalized in the amount of',
                     'thank_you': 'Thank you for your business.', 'phone': 'Phone:', 'email': 'Email:'
@@ -1559,7 +1561,7 @@ class InvoiceWidget(QWidget):
                 'fr': {
                     'invoice': 'FACTURE', 'invoice_details': 'Détails de la facture:', 'billed_to': 'Facturé à:',
                     'invoice_number': 'Numéro de facture:', 'invoice_date': 'Date de facture:', 'due_date': "Date d'échéance:",
-                    'company': 'Société:', 'address': 'Adresse:', 'tax_id': 'ICE:', 'stay_details': 'Articles de la facture:',
+                    'company': 'Société:', 'address': 'Adresse:', 'tax_id': 'ICE:', 'item_details': 'Articles de la facture:',
                     'check_in': 'Description', 'check_out': 'Quantité', 'nights': 'Prix Unitaire', 'total': 'Total Ligne',
                     'subtotal': 'Sous-total', 'total_due': 'Total dû', 'total_in_words': 'Arrêté la présente facture à la somme de',
                     'thank_you': "Merci pour votre confiance.", 'phone': 'Telephone:'
@@ -1589,14 +1591,18 @@ class InvoiceWidget(QWidget):
             main_font = 'Arial'
             try:
                 import os
-                font_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'fonts')
+                font_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'fonts')
                 # Try Alexandria Regular/Bold if available
                 alex_reg = os.path.join(font_dir, 'Alexandria-Regular.ttf')
                 alex_bold = os.path.join(font_dir, 'Alexandria-Bold.ttf')
+                calibri_reg = os.path.join(font_dir, 'calibri.ttf')
+                calibri_bold = os.path.join(font_dir, 'calibrib.ttf')
                 if os.path.exists(alex_reg) and os.path.exists(alex_bold):
                     pdf.add_font('alex', '', alex_reg, uni=True)
                     pdf.add_font('alex', 'B', alex_bold, uni=True)
-                    main_font = 'alex'
+                    pdf.add_font('calibri', '', calibri_reg, uni=True)
+                    pdf.add_font('calibri', 'B', calibri_bold, uni=True)
+                    main_font = 'calibri'
             except Exception:
                 pass
             page_width = pdf.w - 2 * pdf.l_margin
@@ -1638,12 +1644,14 @@ class InvoiceWidget(QWidget):
             
             # Use business name from database or fallback to hardcoded value
             business_name = business_info.get('business_name') if business_info.get('business_name') else "AG Food"
+            business_name = get_display(arabic_reshaper.reshape(business_name))
             pdf.cell(page_width * 0.7, 10, business_name, 0, 1, "L")
             pdf.set_font(main_font, '', 10)
             
             # Add business address if available
             address_line = business_info.get('address_line')
             if address_line:
+                address_line = get_display(arabic_reshaper.reshape(address_line))
                 pdf.cell(0, 5, address_line, 0, 1, "L")
             
             # Add phone numbers if available
@@ -1651,11 +1659,13 @@ class InvoiceWidget(QWidget):
             phone_mobile = business_info.get('phone_mobile')
             
             if phone_landline:
+                phone_landline = get_display(arabic_reshaper.reshape(phone_landline))
                 pdf.cell(18, 5, "Tél", 0, 0, "L")
                 pdf.cell(3, 5, ":", 0, 0, "L")
                 pdf.cell(0, 5, phone_landline, 0, 1, "L")
             
             if phone_mobile and phone_mobile != phone_landline:
+                phone_mobile = get_display(arabic_reshaper.reshape(phone_mobile))
                 pdf.cell(18, 5, "Mobile", 0, 0, "L")
                 pdf.cell(3, 5, ":", 0, 0, "L")
                 pdf.cell(0, 5, phone_mobile, 0, 1, "L")
@@ -1663,6 +1673,7 @@ class InvoiceWidget(QWidget):
             # Add fax if available
             fax_number = business_info.get('fax_number')
             if fax_number:
+                fax_number = get_display(arabic_reshaper.reshape(fax_number))
                 pdf.cell(18, 5, "Fax", 0, 0, "L")
                 pdf.cell(3, 5, ":", 0, 0, "L")
                 pdf.cell(0, 5, fax_number, 0, 1, "L")
@@ -1670,6 +1681,7 @@ class InvoiceWidget(QWidget):
             # Add email if available
             email_address = business_info.get('email_address')
             if email_address:
+                email_address = get_display(arabic_reshaper.reshape(email_address))
                 pdf.cell(18, 5, "Courriel", 0, 0, "L")
                 pdf.cell(3, 5, ":", 0, 0, "L")
                 pdf.cell(0, 5, email_address, 0, 1, "L")
@@ -1677,33 +1689,41 @@ class InvoiceWidget(QWidget):
             pdf.ln(2)
             # Title
             pdf.set_font(main_font, 'B', 24)
-            pdf.cell(0, 15, strings[lang]['invoice'], 0, 1, 'C')
+            invoice_title = get_display(arabic_reshaper.reshape(strings[lang]['invoice']))
+            pdf.cell(0, 15, invoice_title, 0, 1, 'C')
             if include_subject and subject:
                 pdf.set_font(main_font, 'B', 12)
+                subject = get_display(arabic_reshaper.reshape(subject))
                 pdf.cell(0, 10, f"Subject: {subject}", 0, 1, 'L')
                 pdf.ln(2)
             # Two columns headers
             gap_width = page_width * 0.10; col_width = page_width * 0.45
             pdf.set_font(main_font, 'B', 12)
             pdf.set_fill_color(200, 220, 255)
-            pdf.cell(col_width, 8, strings[lang]['invoice_details'], 0, 0, 'L', 1)
+            invoice_details_title = get_display(arabic_reshaper.reshape(strings[lang]['invoice_details']))
+            billed_to_title = get_display(arabic_reshaper.reshape(strings[lang]['billed_to']))
+            pdf.cell(col_width, 8, invoice_details_title, 0, 0, 'L', 1)
             pdf.cell(gap_width, 5, '', 0, 0, 'C')
-            pdf.cell(col_width, 8, strings[lang]['billed_to'], 0, 1, 'L', 1)
+            pdf.cell(col_width, 8, billed_to_title, 0, 1, 'L', 1)
             pdf.ln(1)
             pdf.set_font(main_font, '', 10)
             # Left/right columns with client details
-            first_line = client_lines[0] if client_lines else ''
-            pdf.cell(col_width, 5, f"{strings[lang]['invoice_number']} {invoice_number}", 0, 0, 'L')
+            first_line = get_display(arabic_reshaper.reshape(client_lines[0])) if client_lines else ''
+            invoice_number_text = get_display(arabic_reshaper.reshape(f"{strings[lang]['invoice_number']} {invoice_number}"))
+            pdf.cell(col_width, 5, invoice_number_text, 0, 0, 'L')
             pdf.cell(gap_width, 5, '', 0, 0, 'C')
             pdf.cell(col_width, 5, first_line, 0, 1, 'L')
-            pdf.cell(col_width, 5, f"{strings[lang]['invoice_date']} {invoice_date}", 0, 0, 'L')
+            invoice_date_text = get_display(arabic_reshaper.reshape(f"{strings[lang]['invoice_date']} {invoice_date}"))
+            pdf.cell(col_width, 5, invoice_date_text, 0, 0, 'L')
             pdf.cell(gap_width, 5, '', 0, 0, 'C')
             remaining = client_lines[1:]
             if remaining:
-                pdf.cell(col_width, 5, remaining[0], 0, 1, 'L')
+                remaining_line = get_display(arabic_reshaper.reshape(remaining[0]))
+                pdf.cell(col_width, 5, remaining_line, 0, 1, 'L')
                 for line in remaining[1:]:
                     pdf.cell(col_width, 5, '', 0, 0, 'L')
                     pdf.cell(gap_width, 5, '', 0, 0, 'C')
+                    line = get_display(arabic_reshaper.reshape(line))
                     pdf.cell(col_width, 5, line, 0, 1, 'L')
             else:
                 pdf.cell(col_width, 5, '', 0, 1, 'L')
@@ -1711,7 +1731,9 @@ class InvoiceWidget(QWidget):
             # Items section
             pdf.set_font(main_font, 'B', 12)
             pdf.set_draw_color(200, 200, 200)
-            pdf.cell(0, 10, strings[lang]['stay_details'], 0, 1, 'L')
+            item_details_title = get_display(arabic_reshaper.reshape(strings[lang]['item_details']))
+            pdf.set_font(main_font, 'B', 12)
+            pdf.cell(0, 10, item_details_title, 0, 1, 'L')
             pdf.set_fill_color(200, 220, 255)
             pdf.set_text_color(0,0,0)
             # Table width and headers
@@ -1727,7 +1749,8 @@ class InvoiceWidget(QWidget):
             def write_row(cells, widths, aligns, is_header=False, row_height=7, fill=False):
                 for cell, w, al in zip(cells, widths, aligns):
                     pdf.set_font(main_font, 'B', 10 if is_header else 10)
-                    pdf.cell(w, row_height, str(cell), 1, 0, al, fill)
+                    cell = get_display(arabic_reshaper.reshape(str(cell)))
+                    pdf.cell(w, row_height, cell, 1, 0, al, fill)
                 pdf.ln()
             write_row(headers, widths, aligns, is_header=True, row_height=7, fill=True)
             for idx, it in enumerate(items):
@@ -1764,12 +1787,15 @@ class InvoiceWidget(QWidget):
             # Totals
             total_w = widths[-1]
             pdf.set_font(main_font, '', 10)
-            pdf.cell(table_width-total_w, 8, strings[lang]['subtotal'], 1, 0, 'R')
+            subtotal_text = get_display(arabic_reshaper.reshape(strings[lang]['subtotal']))
+            pdf.cell(table_width-total_w, 8, subtotal_text, 1, 0, 'R')
             pdf.cell(total_w, 8, f"{subtotal:,.2f} {currency}", 1, 1, 'R')
-            pdf.cell(table_width-total_w, 8, 'Tax', 1, 0, 'R')
+            tax_text = get_display(arabic_reshaper.reshape('Tax'))
+            pdf.cell(table_width-total_w, 8, tax_text, 1, 0, 'R')
             pdf.cell(total_w, 8, f"{tax_amount:,.2f} {currency}", 1, 1, 'R')
             pdf.set_font(main_font, 'B', 12)
-            pdf.cell(table_width-total_w, 8, strings[lang]['total_due'], 1, 0, 'R', 1)
+            total_due_text = get_display(arabic_reshaper.reshape(strings[lang]['total_due']))
+            pdf.cell(table_width-total_w, 8, total_due_text, 1, 0, 'R', 1)
             pdf.cell(total_w, 8, f"{total_amount:,.2f} {currency}", 1, 1, 'R', 1)
             pdf.ln(3)
             # Amount in words
@@ -1786,7 +1812,8 @@ class InvoiceWidget(QWidget):
                         dec_words = num2words(dec_part, lang='en') if dec_part else ''
                         words = f"{int_words} dirhams" + (f", and {dec_words} centimes" if dec_part else '')
                     pdf.set_font(main_font, '', 10)
-                    pdf.multi_cell(page_width, 5, f"{strings[lang]['total_in_words']} {words}.", 0, 'L')
+                    total_in_words_text = get_display(arabic_reshaper.reshape(f"{strings[lang]['total_in_words']} {words}."))
+                    pdf.multi_cell(page_width, 5, total_in_words_text, 0, 'L')
                 except Exception:
                     pass
             # Footer - Add business information from database
@@ -1799,29 +1826,35 @@ class InvoiceWidget(QWidget):
             bank_identity = business_info.get('bank_identity_statement')
             bank_name = business_info.get('bank_name')
             if bank_identity and bank_name:
-                pdf.cell(0, 5, f"Relevé d'Identité Bancaire (RIB): {bank_identity} - {bank_name}", 0, 1, "L")
+                bank_text = get_display(arabic_reshaper.reshape(f"Relevé d'Identité Bancaire (RIB): {bank_identity} - {bank_name}"))
+                pdf.cell(0, 5, bank_text, 0, 1, "L")
             elif bank_identity:
-                pdf.cell(0, 5, f"Relevé d'Identité Bancaire (RIB): {bank_identity}", 0, 1, "L")
+                bank_text = get_display(arabic_reshaper.reshape(f"Relevé d'Identité Bancaire (RIB): {bank_identity}"))
+                pdf.cell(0, 5, bank_text, 0, 1, "L")
             
             # Add common company identifier (ICE) if available
             company_id = business_info.get('common_company_identifier')
             if company_id:
-                pdf.cell(0, 5, f"Identifiant Commun de l'Entreprise (ICE): {company_id}", 0, 1, "L")
+                company_id_text = get_display(arabic_reshaper.reshape(f"Identifiant Commun de l'Entreprise (ICE): {company_id}"))
+                pdf.cell(0, 5, company_id_text, 0, 1, "L")
             
             # Add patente number if available
             patente = business_info.get('patente_number')
             if patente:
-                pdf.cell(0, 5, f"Patente: {patente}", 0, 1, "L")
+                patente_text = get_display(arabic_reshaper.reshape(f"Patente: {patente}"))
+                pdf.cell(0, 5, patente_text, 0, 1, "L")
             
             # Add tax identifier (IF) if available
             tax_id = business_info.get('tax_identifier')
             if tax_id:
-                pdf.cell(0, 5, f"Identifiant Fiscal (IF): {tax_id}", 0, 1, "L")
+                tax_id_text = get_display(arabic_reshaper.reshape(f"Identifiant Fiscal (IF): {tax_id}"))
+                pdf.cell(0, 5, tax_id_text, 0, 1, "L")
             
             # Add trade register number (RC) if available
             trade_reg = business_info.get('trade_register_number')
             if trade_reg:
-                pdf.cell(0, 5, f"Registre de Commerce (RC): {trade_reg}", 0, 1, "L")
+                trade_reg_text = get_display(arabic_reshaper.reshape(f"Registre de Commerce (RC): {trade_reg}"))
+                pdf.cell(0, 5, trade_reg_text, 0, 1, "L")
 
             pdf.output(pdf_path)
             return True
