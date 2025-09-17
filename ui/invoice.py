@@ -932,7 +932,7 @@ class InvoiceWidget(QWidget):
         self.tax_name = QLineEdit(); self.tax_value = QDoubleSpinBox(); self.tax_value.setRange(0, 100000); self.tax_value.setDecimals(2)
         self.tax_type = QComboBox(); self.tax_type.addItems(['Amount', 'Percentage'])
         self.tax_inclusive = QCheckBox('Prices tax-inclusive')
-        self.lang_combo = QComboBox(); self.lang_combo.addItems(['English', 'French'])
+        self.lang_combo = QComboBox(); self.lang_combo.addItems(['English', 'French', 'Arabic'])
         self.currency_combo = QComboBox(); self.currency_combo.addItems(['MAD','USD','EUR','GBP']); self.currency_combo.setCurrentText('MAD')
         self.include_subject = QCheckBox('Include subject')
         self.subject_field = QLineEdit(); self.subject_field.setEnabled(False)
@@ -1519,7 +1519,7 @@ class InvoiceWidget(QWidget):
             # Gather context
             client_text = client_details.get('name') or self.client_cb.currentText().strip() or 'Walk-in'
             currency = self.currency_combo.currentText()
-            lang = 'fr' if (self.lang_combo.currentText() or '').lower().startswith('fr') else 'en'
+            lang = 'fr' if (self.lang_combo.currentText() or '').lower().startswith('fr') else 'ar' if (self.lang_combo.currentText() or '').lower().startswith('ar') else 'en'
             include_subject = self.include_subject.isChecked()
             subject = self.subject_field.text().strip()
             include_unit = self.include_unit_column.isChecked()
@@ -1551,20 +1551,57 @@ class InvoiceWidget(QWidget):
             # Strings
             strings = {
                 'en': {
-                    'invoice': 'INVOICE', 'invoice_details': 'Invoice Details:', 'billed_to': 'Billed To:',
-                    'invoice_number': 'Invoice Number:', 'invoice_date': 'Invoice Date:', 'due_date': 'Due Date:',
-                    'company': 'Company:', 'address': 'Address:', 'tax_id': 'ICE:', 'item_details': 'Invoice Items:',
-                    'check_in': 'Description', 'check_out': 'Quantity', 'nights': 'Unit Price', 'total': 'Line Total',
-                    'subtotal': 'Subtotal', 'total_due': 'Total Due', 'total_in_words': 'This invoice has been finalized in the amount of',
-                    'thank_you': 'Thank you for your business.', 'phone': 'Phone:', 'email': 'Email:'
+                    'invoice': 'INVOICE',
+                    'invoice_details': 'Invoice Details:',
+                    'billed_to': 'Billed To:',
+                    'invoice_number': 'Invoice Number:',
+                    'invoice_date': 'Invoice Date:',
+                    'due_date': 'Due Date:',
+                    'company': 'Company:',
+                    'address': 'Address:',
+                    'tax_id': 'ICE:',
+                    'item_details': 'Invoice Items:',
+                    'description': 'Description',
+                    'quantity': 'Quantity',
+                    'unit_price': 'Unit Price',
+                    'total': 'Line Total',
+                    'subtotal': 'Subtotal',
+                    'total_due': 'Total Due',
+                    'total_in_words': 'This invoice has been finalized in the amount of',
+                    'thank_you': 'Thank you for your business.',
+                    'phone': 'Phone:',
+                    'email': 'Email:',
+                    'uom': 'Unit'
                 },
                 'fr': {
-                    'invoice': 'FACTURE', 'invoice_details': 'Détails de la facture:', 'billed_to': 'Facturé à:',
-                    'invoice_number': 'Numéro de facture:', 'invoice_date': 'Date de facture:', 'due_date': "Date d'échéance:",
-                    'company': 'Société:', 'address': 'Adresse:', 'tax_id': 'ICE:', 'item_details': 'Articles de la facture:',
-                    'check_in': 'Description', 'check_out': 'Quantité', 'nights': 'Prix Unitaire', 'total': 'Total Ligne',
-                    'subtotal': 'Sous-total', 'total_due': 'Total dû', 'total_in_words': 'Arrêté la présente facture à la somme de',
-                    'thank_you': "Merci pour votre confiance.", 'phone': 'Telephone:'
+                    'invoice': 'FACTURE',
+                    'invoice_details': 'Détails de la facture:',
+                    'billed_to': 'Facturé à:',
+                    'invoice_number': 'Numéro de facture:',
+                    'invoice_date': 'Date de facture:',
+                    'due_date': "Date d'échéance:",
+                    'company': 'Société:',
+                    'address': 'Adresse:',
+                    'tax_id': 'ICE:',
+                    'item_details': 'Articles de la facture:',
+                    'description': 'Description',
+                    'quantity': 'Quantité',
+                    'unit_price': 'Prix Unitaire',
+                    'total': 'Total Ligne',
+                    'subtotal': 'Sous-total',
+                    'total_due': 'Total dû',
+                    'total_in_words': 'Arrêté la présente facture à la somme de',
+                    'thank_you': "Merci pour votre confiance.",
+                    'phone': 'Telephone:',
+                    'uom': 'Unité'
+                },
+                'ar': {
+                    'invoice': 'فاتورة', 'invoice_details': 'تفاصيل الفاتورة:', 'billed_to': 'عميل:',
+                    'invoice_number': 'رقم الفاتورة:', 'invoice_date': 'تاريخ الفاتورة:', 'due_date': 'تاريخ الاستحقاق:',
+                    'company': 'الشركة:', 'address': 'العنوان:', 'tax_id': 'المعرف الضريبي:', 'item_details': 'تفاصيل الفاتورة:',
+                    'description': 'البيان', 'quantity': 'الكمية', 'unit_price': 'سعر الوحدة', 'total': 'المجموع',
+                    'subtotal': 'المجموع الفرعي', 'total_due': 'المبلغ الإجمالي', 'total_in_words': 'المبلغ الإجمالي بالحروف هو',
+                    'thank_you': 'شكرا لتعاملكم معنا.', 'phone': 'الهاتف:', 'email': 'البريد الإلكتروني:', 'uom': 'الوحدة', 'tax': 'الضريبة'
                 }
             }
             client_lines = [client_text]
@@ -1584,7 +1621,8 @@ class InvoiceWidget(QWidget):
             # PDF init
             pdf = FPDF(orientation='P', unit='mm', format='A4')
             pdf.add_page()
-            y_margin = 6; x_margin = 10
+            y_margin = 6
+            x_margin = 10
             pdf.set_auto_page_break(auto=True, margin=y_margin)
             pdf.set_left_margin(x_margin); pdf.set_top_margin(y_margin); pdf.set_right_margin(x_margin)
             # Fonts
@@ -1697,24 +1735,37 @@ class InvoiceWidget(QWidget):
                 pdf.cell(0, 10, f"Subject: {subject}", 0, 1, 'L')
                 pdf.ln(2)
             # Two columns headers
+            global_row_height = 7
             gap_width = page_width * 0.10; col_width = page_width * 0.45
             pdf.set_font(main_font, 'B', 12)
             pdf.set_fill_color(200, 220, 255)
             invoice_details_title = get_display(arabic_reshaper.reshape(strings[lang]['invoice_details']))
             billed_to_title = get_display(arabic_reshaper.reshape(strings[lang]['billed_to']))
-            pdf.cell(col_width, 8, invoice_details_title, 0, 0, 'L', 1)
+            if lang == "ar":
+                pdf.cell(col_width, global_row_height, invoice_details_title, 0, 0, 'R', 1)
+            else:
+                pdf.cell(col_width, global_row_height, invoice_details_title, 0, 0, 'L', 1)
             pdf.cell(gap_width, 5, '', 0, 0, 'C')
-            pdf.cell(col_width, 8, billed_to_title, 0, 1, 'L', 1)
+            if lang == "ar":
+                pdf.cell(col_width, global_row_height, billed_to_title, 0, 1, 'R', 1)
+            else:
+                pdf.cell(col_width, global_row_height, billed_to_title, 0, 1, 'L', 1)
             pdf.ln(1)
             pdf.set_font(main_font, '', 10)
             # Left/right columns with client details
             first_line = get_display(arabic_reshaper.reshape(client_lines[0])) if client_lines else ''
             invoice_number_text = get_display(arabic_reshaper.reshape(f"{strings[lang]['invoice_number']} {invoice_number}"))
-            pdf.cell(col_width, 5, invoice_number_text, 0, 0, 'L')
+            if lang == "ar":
+                pdf.cell(col_width, 5, invoice_number_text, 0, 0, 'R')
+            else:
+                pdf.cell(col_width, 5, invoice_number_text, 0, 0, 'L')
             pdf.cell(gap_width, 5, '', 0, 0, 'C')
             pdf.cell(col_width, 5, first_line, 0, 1, 'L')
             invoice_date_text = get_display(arabic_reshaper.reshape(f"{strings[lang]['invoice_date']} {invoice_date}"))
-            pdf.cell(col_width, 5, invoice_date_text, 0, 0, 'L')
+            if lang == "ar":
+                pdf.cell(col_width, 5, invoice_date_text, 0, 0, 'R')
+            else:
+                pdf.cell(col_width, 5, invoice_date_text, 0, 0, 'L')
             pdf.cell(gap_width, 5, '', 0, 0, 'C')
             remaining = client_lines[1:]
             if remaining:
@@ -1733,19 +1784,32 @@ class InvoiceWidget(QWidget):
             pdf.set_draw_color(200, 200, 200)
             item_details_title = get_display(arabic_reshaper.reshape(strings[lang]['item_details']))
             pdf.set_font(main_font, 'B', 12)
-            pdf.cell(0, 10, item_details_title, 0, 1, 'L')
+            if lang == "ar":
+                pdf.cell(0, 10, item_details_title, 0, 1, 'R')
+            else:
+                pdf.cell(0, 10, item_details_title, 0, 1, 'L')
             pdf.set_fill_color(200, 220, 255)
             pdf.set_text_color(0,0,0)
             # Table width and headers
             table_width = page_width
-            if include_unit:
-                headers = ['#', strings[lang]['check_in'], strings[lang]['check_out'], 'Unit', strings[lang]['nights'], strings[lang]['total']]
-                widths = [table_width*0.05, table_width*0.35, table_width*0.15, table_width*0.12, table_width*0.15, table_width*0.18]
-                aligns = ['C','L','C','C','R','R']
+            if lang == 'ar':
+                if include_unit:
+                    headers = [strings[lang]['total'], strings[lang]['unit_price'], strings[lang]['quantity'], strings[lang]['uom'], strings[lang]['description'], '#']
+                    widths = [table_width*0.18, table_width*0.15, table_width*0.15, table_width*0.12, table_width*0.35, table_width*0.05]
+                    aligns = ['R','R','C','C','R','C']
+                else:
+                    headers = ['المجموع', 'سعر الوحدة', 'الكمية', 'البيان', '#']
+                    widths = [table_width*0.18, table_width*0.15, table_width*0.15, table_width*0.47, table_width*0.05]
+                    aligns = ['R','R','C','R','C']
             else:
-                headers = ['#', strings[lang]['check_in'], strings[lang]['check_out'], strings[lang]['nights'], strings[lang]['total']]
-                widths = [table_width*0.05, table_width*0.47, table_width*0.15, table_width*0.15, table_width*0.18]
-                aligns = ['C','L','C','R','R']
+                if include_unit:
+                    headers = ['#', strings[lang]['description'], strings[lang]['quantity'], strings[lang]['uom'], strings[lang]['unit_price'], strings[lang]['total']]
+                    widths = [table_width*0.05, table_width*0.35, table_width*0.15, table_width*0.12, table_width*0.15, table_width*0.18]
+                    aligns = ['C','L','C','C','R','R']
+                else:
+                    headers = ['#', strings[lang]['description'], strings[lang]['quantity'], strings[lang]['unit_price'], strings[lang]['total']]
+                    widths = [table_width*0.05, table_width*0.47, table_width*0.15, table_width*0.15, table_width*0.18]
+                    aligns = ['C','L','C','R','R']
             def write_row(cells, widths, aligns, is_header=False, row_height=7, fill=False):
                 for cell, w, al in zip(cells, widths, aligns):
                     pdf.set_font(main_font, 'B', 10 if is_header else 10)
@@ -1779,31 +1843,50 @@ class InvoiceWidget(QWidget):
                             unit = ''
                 
                 if include_unit:
-                    row = [str(idx + 1), name, f"{qty:g}", unit, f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
+                    row = [str(idx + 1), name, unit, f"{qty:g}", f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
                 else:
                     row = [str(idx + 1), name, f"{qty:g}", f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
+                if lang == 'ar':
+                    row.reverse()
                 write_row(row, widths, aligns, is_header=False, row_height=7, fill=True)
             pdf.ln(2)
             # Totals
+            total_w_ar = widths[0]
             total_w = widths[-1]
             pdf.set_font(main_font, '', 10)
-            subtotal_text = get_display(arabic_reshaper.reshape(strings[lang]['subtotal']))
-            pdf.cell(table_width-total_w, 8, subtotal_text, 1, 0, 'R')
-            pdf.cell(total_w, 8, f"{subtotal:,.2f} {currency}", 1, 1, 'R')
-            tax_text = get_display(arabic_reshaper.reshape('Tax'))
-            pdf.cell(table_width-total_w, 8, tax_text, 1, 0, 'R')
-            pdf.cell(total_w, 8, f"{tax_amount:,.2f} {currency}", 1, 1, 'R')
-            pdf.set_font(main_font, 'B', 12)
-            total_due_text = get_display(arabic_reshaper.reshape(strings[lang]['total_due']))
-            pdf.cell(table_width-total_w, 8, total_due_text, 1, 0, 'R', 1)
-            pdf.cell(total_w, 8, f"{total_amount:,.2f} {currency}", 1, 1, 'R', 1)
+            if lang == 'ar':
+                subtotal_text = get_display(arabic_reshaper.reshape(strings[lang]['subtotal']))
+                pdf.cell(total_w_ar, 8, f"{subtotal:,.2f} {currency}", 1, 0, 'L')
+                pdf.cell(table_width-total_w_ar, 8, subtotal_text, 1, 1, 'L')
+                tax_text = get_display(arabic_reshaper.reshape(strings[lang]['tax']))
+                pdf.cell(total_w_ar, 8, f"{tax_amount:,.2f} {currency}", 1, 0, 'L')
+                pdf.cell(table_width-total_w_ar, 8, tax_text, 1, 1, 'L')
+                pdf.set_font(main_font, 'B', 12)
+                total_due_text = get_display(arabic_reshaper.reshape(strings[lang]['total_due']))
+                pdf.cell(total_w_ar, 8, f"{total_amount:,.2f} {currency}", 1, 0, 'L', 1)
+                pdf.cell(table_width-total_w_ar, 8, total_due_text, 1, 1, 'L', 1)
+            else:
+                subtotal_text = strings[lang]['subtotal']
+                pdf.cell(table_width-total_w, 8, subtotal_text, 1, 0, 'R')
+                pdf.cell(total_w, 8, f"{subtotal:,.2f} {currency}", 1, 1, 'R')
+                tax_text = 'Tax'
+                pdf.cell(table_width-total_w, 8, tax_text, 1, 0, 'R')
+                pdf.cell(total_w, 8, f"{tax_amount:,.2f} {currency}", 1, 1, 'R')
+                pdf.set_font(main_font, 'B', 12)
+                total_due_text = strings[lang]['total_due']
+                pdf.cell(table_width-total_w, 8, total_due_text, 1, 0, 'R', 1)
+                pdf.cell(total_w, 8, f"{total_amount:,.2f} {currency}", 1, 1, 'R', 1)
             pdf.ln(3)
             # Amount in words
             if num2words is not None:
                 int_part = int(total_amount)
                 dec_part = int(round((total_amount - int_part)*100))
                 try:
-                    if lang=='fr':
+                    if lang == 'ar':
+                        int_words = num2words(int_part, lang='ar')
+                        dec_words = num2words(dec_part, lang='ar') if dec_part else ''
+                        words = f"{int_words} درهم" + (f" و {dec_words} سنتيم" if dec_part else '')
+                    elif lang=='fr':
                         int_words = num2words(int_part, lang='fr')
                         dec_words = num2words(dec_part, lang='fr') if dec_part else ''
                         words = f"{int_words} dirhams" + (f", et {dec_words} centimes" if dec_part else '')
@@ -1813,7 +1896,10 @@ class InvoiceWidget(QWidget):
                         words = f"{int_words} dirhams" + (f", and {dec_words} centimes" if dec_part else '')
                     pdf.set_font(main_font, '', 10)
                     total_in_words_text = get_display(arabic_reshaper.reshape(f"{strings[lang]['total_in_words']} {words}."))
-                    pdf.multi_cell(page_width, 5, total_in_words_text, 0, 'L')
+                    if lang == "ar":
+                        pdf.multi_cell(page_width, 5, total_in_words_text, 0, 'R')
+                    else:
+                        pdf.multi_cell(page_width, 5, total_in_words_text, 0, 'L')
                 except Exception:
                     pass
             # Footer - Add business information from database
