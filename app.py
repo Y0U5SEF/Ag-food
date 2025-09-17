@@ -38,6 +38,9 @@ if __name__ == '__main__':
     
     def on_db_ready():
         """Handles the UI flow after the database is successfully connected."""
+        # Load business info now that database is ready
+        main_window.load_business_info()
+        
         if DISABLE_LOGIN:
             print("Login disabled. Showing main window directly.")
             main_window.showMaximized()

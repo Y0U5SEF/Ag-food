@@ -6,7 +6,7 @@ Coordinates header, sidebar, and content areas.
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QStackedWidget, QLabel, QMessageBox, QTabWidget, QComboBox, QFormLayout,
-    QGridLayout, QToolButton, QLineEdit, QSizePolicy
+    QGridLayout, QToolButton, QLineEdit, QSizePolicy, QPushButton, QSpacerItem
 )
 from PyQt6.QtWidgets import QStyle
 from PyQt6.QtCore import QSize
@@ -153,10 +153,27 @@ class MainAppWindow(QMainWindow):
         business_form.addRow(QLabel(i18n.tr('business.trade_register')), self.trade_register_number_edit)
         business_form.addRow(QLabel(i18n.tr('business.patente')), self.business_patente_edit)
 
-        self.settings_tabs.addTab(self.business_tab, 'Business Information')
+        # Add a vertical spacer to push the button container to the bottom.
+        business_form.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+
+        # Create a new layout for the button to control its alignment.
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()  # Add a spacer to push the button to the right.
         
-        # Load existing business info
-        self.load_business_info()
+        # Add Save button.
+        self.save_business_info_button = QPushButton(i18n.tr('settings.save_business_info'))
+        self.save_business_info_button.setStyleSheet(self.theme_manager.get_global_button_stylesheet())
+        self.save_business_info_button.clicked.connect(self.save_business_info)
+        
+        button_layout.addWidget(self.save_business_info_button)
+        
+        # Add the button layout to a new row in the form.
+        business_form.addRow(button_layout)
+        
+        self.settings_tabs.addTab(self.business_tab, i18n.tr('business.name'))
+        
+        # Note: Not loading business info here because database might not be ready yet
+        # Load existing business info will be called when database is ready
         
         # Clients management content
         self.clients_widget = ClientsManagementWidget(self.db_manager)

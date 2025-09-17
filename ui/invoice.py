@@ -17,7 +17,7 @@ import tempfile
 
 
 from typing import Optional
-from PyQt6.QtCore import Qt, QSize, QPoint
+from PyQt6.QtCore import Qt, QSize, QPoint, QTimer
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QToolButton,
     QTableWidget, QTableWidgetItem, QMessageBox, QComboBox, QLabel,
@@ -1087,6 +1087,14 @@ class InvoiceWidget(QWidget):
         if not pid:
             QMessageBox.information(self, 'Invoice', 'Product not found')
             return
+        # Ensure UOM is fetched from database
+        if pid and not uom:
+            try:
+                product_data = self.db.get_product(pid)
+                if product_data and len(product_data) > 10:
+                    uom = product_data[10] or ''
+            except Exception:
+                uom = ''
         self._add_item_row(pid, name or '', 1, price, sku=sku, barcode=barcode, uom=uom)
         self.search.clear()
 
@@ -1192,7 +1200,12 @@ class InvoiceWidget(QWidget):
                 price = float(data) if data is not None else float(price_item.text().replace(',', ''))
             except Exception:
                 price = 0.0
-            items.append({'product_id': int(pid) if pid is not None else None, 'name': prod_item.text(), 'qty': qty, 'unit_price': price})
+            try:
+                unit_item = self.table.item(r, 3)
+                uom = unit_item.text() if unit_item else ''
+            except Exception:
+                uom = ''
+            items.append({'product_id': int(pid) if pid is not None else None, 'name': prod_item.text(), 'qty': qty, 'unit_price': price, 'uom': uom})
         return items
 
     def _selected_client_payload(self):
@@ -1426,7 +1439,7 @@ class InvoiceWidget(QWidget):
                 label_parts.append(f"[{code}]")
             label_parts.append(f"{float(price or 0):,.2f}")
             it = QStandardItem('  '.join(label_parts))
-            payload = {'pid': rid, 'name': name or '', 'price': float(price or 0), 'barcode': barcode, 'sku': sku}
+            payload = {'pid': rid, 'name': name or '', 'price': float(price or 0), 'barcode': barcode, 'sku': sku, 'uom': uom or ''}
             it.setData(payload, Qt.ItemDataRole.UserRole)
             self._compl_model.appendRow(it)
         # Show popup
@@ -1449,16 +1462,17 @@ class InvoiceWidget(QWidget):
                         payload = self._compl_model.data(idx, Qt.ItemDataRole.UserRole)
                         break
             if payload:
-                # Get UOM from database for this product
-                uom = None
-                try:
-                    product_data = self.db.get_product(payload['pid'])
-                    if product_data and len(product_data) > 10:
-                        uom = product_data[10]
-                except Exception:
-                    pass
+                # Use UOM from payload if available, otherwise fetch from database
+                uom = payload.get('uom')
+                if not uom:
+                    try:
+                        product_data = self.db.get_product(payload['pid'])
+                        if product_data and len(product_data) > 10:
+                            uom = product_data[10]
+                    except Exception:
+                        uom = ''
                 self._add_item_row(payload['pid'], payload['name'], 1, payload['price'], sku=payload.get('sku'), barcode=payload.get('barcode'), uom=uom)
-                self.search.clear()
+                QTimer.singleShot(0, self.search.clear)
         except Exception:
             pass
 
@@ -1707,9 +1721,9 @@ class InvoiceWidget(QWidget):
                 widths = [table_width*0.05, table_width*0.35, table_width*0.15, table_width*0.12, table_width*0.15, table_width*0.18]
                 aligns = ['C','L','C','C','R','R']
             else:
-                headers = ['#', strings[lang]['check_in'], strings[lang]['check_out'], 'Unit', strings[lang]['nights'], strings[lang]['total']]
-                widths = [table_width*0.05, table_width*0.37, table_width*0.15, table_width*0.12, table_width*0.15, table_width*0.16]
-                aligns = ['C','L','C','C','R','R']
+                headers = ['#', strings[lang]['check_in'], strings[lang]['check_out'], strings[lang]['nights'], strings[lang]['total']]
+                widths = [table_width*0.05, table_width*0.47, table_width*0.15, table_width*0.15, table_width*0.18]
+                aligns = ['C','L','C','R','R']
             def write_row(cells, widths, aligns, is_header=False, row_height=7, fill=False):
                 for cell, w, al in zip(cells, widths, aligns):
                     pdf.set_font(main_font, 'B', 10 if is_header else 10)
@@ -1727,21 +1741,24 @@ class InvoiceWidget(QWidget):
                 price = float(it.get('unit_price') or 0)
                 line_total = qty*price
                 
-                # Get unit from database for this product
-                unit = ''
-                product_id = it.get('product_id')
-                if product_id:
-                    try:
-                        product_data = self.db.get_product(product_id)
-                        if product_data and len(product_data) > 10:
-                            unit = product_data[10] or ''
-                    except Exception:
-                        unit = ''
+                # Get unit from item data (already fetched when item was added)
+                unit = it.get('uom', '')
+                
+                # If for some reason UOM is not available in item data, fetch from database
+                if not unit:
+                    product_id = it.get('product_id')
+                    if product_id:
+                        try:
+                            product_data = self.db.get_product(product_id)
+                            if product_data and len(product_data) > 10:
+                                unit = product_data[10] or ''
+                        except Exception:
+                            unit = ''
                 
                 if include_unit:
                     row = [str(idx + 1), name, f"{qty:g}", unit, f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
                 else:
-                    row = [str(idx + 1), name, f"{qty:g}", unit, f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
+                    row = [str(idx + 1), name, f"{qty:g}", f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
                 write_row(row, widths, aligns, is_header=False, row_height=7, fill=True)
             pdf.ln(2)
             # Totals

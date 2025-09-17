@@ -143,6 +143,7 @@ class LanguageManager:
                 'business.tax_id': 'Tax Identifier',
                 'business.patente': 'Patente Number',
                 'business.trade_register': 'Trade Register Number',
+                'settings.save_business_info': 'Save Business Information',
             },
             'fr': {
                 'app.window_title': 'AG Food - Gestion de Stock et Factures',
@@ -237,6 +238,7 @@ class LanguageManager:
                 'business.tax_id': 'Identifiant fiscal',
                 'business.patente': 'Numéro de patente',
                 'business.trade_register': 'Numéro de registre du commerce',
+                'settings.save_business_info': 'Enregistrer les informations commerciales',
             },
             'ar': {
                 'app.window_title': 'AG Food - إدارة المخزون والفواتير',
@@ -319,18 +321,19 @@ class LanguageManager:
                 'msg.confirm_delete': 'هل تريد حذف المنتج المحدد؟',
                 
                 # Business Information
-                'business.name': '??? ????',
-                'business.address': '???? ?????',
-                'business.phone_landline': '???? ?????',
-                'business.phone_mobile': '???? ???',
-                'business.fax': '????',
-                'business.email': '??? ?????',
-                'business.bank_identity': '??? ????? ?????',
-                'business.bank_name': '??? ???',
+                'business.name': 'الاسم',
+                'business.address': 'العنوان',
+                'business.phone_landline': 'الهاتف',
+                'business.phone_mobile': 'الهاتف النقال',
+                'business.fax': 'الفاكس',
+                'business.email': 'البريد الالكتروني',
+                'business.bank_identity': 'رقم التعريف (RIB)',
+                'business.bank_name': 'اسم البنك',
                 'business.company_id': '????? ?????? ????',
                 'business.tax_id': '????? ?????',
                 'business.patente': '??? ?????',
                 'business.trade_register': '??? ??????? ?????',
+                'settings.save_business_info': 'حفظ معلومات العمل',
             },
         }
 

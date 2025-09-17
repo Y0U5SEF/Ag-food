@@ -32,6 +32,10 @@ class DatabaseManager(QObject):
         # Create the full path for the database file
         self.db_path = os.path.join(self.app_path, DB_FILE_NAME)
 
+    def _is_connected(self) -> bool:
+        """Check if database is properly connected."""
+        return self.conn is not None and self.cursor is not None
+
     def connect_db(self):
         """Connect to the SQLite database and create tables if they don't exist."""
         try:
@@ -56,6 +60,10 @@ class DatabaseManager(QObject):
 
     def _create_tables(self):
         """Creates the necessary database tables (e.g., for products, invoices, and users)."""
+        # Check if database is connected
+        if self.conn is None or self.cursor is None:
+            print("Database not connected yet")
+            return
         try:
             # Table for stock management (products)
             self.cursor.execute('''
@@ -236,6 +244,10 @@ class DatabaseManager(QObject):
 
     def _ensure_products_schema(self):
         """Ensure products and related tables have expected columns for upgraded installs."""
+        # Check if database is connected
+        if self.conn is None or self.cursor is None:
+            print("Database not connected yet")
+            return
         try:
             self.cursor.execute("PRAGMA table_info(products)")
             cols = [row[1] for row in self.cursor.fetchall()]
@@ -315,6 +327,10 @@ class DatabaseManager(QObject):
 
     def _ensure_business_info_schema(self):
         """Ensure business_info table contains the latest optional columns."""
+        # Check if database is connected
+        if self.conn is None or self.cursor is None:
+            print("Database not connected yet")
+            return
         try:
             self.cursor.execute("PRAGMA table_info(business_info)")
             cols = [row[1] for row in self.cursor.fetchall()]
@@ -344,6 +360,10 @@ class DatabaseManager(QObject):
 
     def _add_default_user(self):
         """Adds a default admin user if the users table is empty."""
+        # Check if database is connected
+        if self.conn is None or self.cursor is None:
+            print("Database not connected yet")
+            return
         try:
             self.cursor.execute("SELECT COUNT(*) FROM users")
             count = self.cursor.fetchone()[0]
@@ -1007,6 +1027,10 @@ class DatabaseManager(QObject):
     # -------- Business Information API --------
     def get_business_info(self):
         """Get business information. Returns a dictionary with all business info fields."""
+        # Check if database is connected
+        if not self._is_connected():
+            print("Database not connected yet")
+            return {}
         try:
             self.cursor.execute("""
                 SELECT business_name, address_line, phone_landline, phone_mobile, fax_number, email_address,
@@ -1033,9 +1057,16 @@ class DatabaseManager(QObject):
         except sqlite3.Error as e:
             print(f"DB error getting business info: {e}")
             return {}
+        except Exception as e:
+            print(f"Unexpected error getting business info: {e}")
+            return {}
 
     def update_business_info(self, business_info: dict) -> bool:
         """Update business information. Returns True on success."""
+        # Check if database is connected
+        if not self._is_connected():
+            print("Database not connected yet")
+            return False
         try:
             self.cursor.execute("SELECT COUNT(*) FROM business_info WHERE id = 1")
             exists = self.cursor.fetchone()[0] > 0
@@ -1085,6 +1116,9 @@ class DatabaseManager(QObject):
         except sqlite3.Error as e:
             print(f"DB error updating business info: {e}")
             return False
+        except Exception as e:
+            print(f"Unexpected error updating business info: {e}")
+            return False
 
     def list_invoices(self, query: Optional[str] = None):
         try:
@@ -1113,7 +1147,7 @@ class DatabaseManager(QObject):
         """Fetch a single product by barcode. Returns tuple or None."""
         try:
             self.cursor.execute(
-                "SELECT id, barcode, sku, name, description, category, current_stock_quantity, price, reorder_point, supplier_id FROM products WHERE barcode = ?",
+                "SELECT id, barcode, sku, name, description, category, current_stock_quantity, price, reorder_point, supplier_id, uom FROM products WHERE barcode = ?",
                 (barcode,),
             )
             return self.cursor.fetchone()
@@ -1124,7 +1158,7 @@ class DatabaseManager(QObject):
     def get_product(self, product_id: int):
         try:
             self.cursor.execute(
-                "SELECT id, barcode, sku, name, description, category, current_stock_quantity, price, reorder_point, supplier_id FROM products WHERE id = ?",
+                "SELECT id, barcode, sku, name, description, category, current_stock_quantity, price, reorder_point, supplier_id, uom FROM products WHERE id = ?",
                 (product_id,),
             )
             return self.cursor.fetchone()

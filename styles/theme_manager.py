@@ -552,6 +552,31 @@ class ThemeManager:
         }}
         """
         
+    def get_global_button_stylesheet(self, theme_name='light'):
+        """Generate a global button stylesheet."""
+        colors = self.get_theme_colors(theme_name)
+        font_family = self.get_font_family_string()
+
+        return f"""
+            QPushButton {{
+                background-color: {colors['button_primary']};
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: {font_family};
+            }}
+            
+            QPushButton:hover {{
+                background-color: {colors['button_primary_hover']};
+            }}
+            
+            QPushButton:pressed {{
+                background-color: {colors['primary_hover']};
+            }}
+        """
+
     def get_header_stylesheet(self, theme_name='light'):
         """Generate header-specific stylesheet with custom font."""
         colors = self.get_theme_colors(theme_name)
