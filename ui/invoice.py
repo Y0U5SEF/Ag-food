@@ -19,13 +19,13 @@ from bidi.algorithm import get_display
 
 
 from typing import Optional
-from PyQt6.QtCore import Qt, QSize, QPoint, QTimer
+from PyQt6.QtCore import Qt, QSize, QPoint, QTimer, QModelIndex
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QToolButton,
     QTableWidget, QTableWidgetItem, QMessageBox, QComboBox, QLabel,
     QSpinBox, QDoubleSpinBox, QDialog, QDialogButtonBox, QSizePolicy, QGroupBox, QCheckBox, QPushButton
 )
-from PyQt6.QtGui import QIntValidator, QIcon, QAction
+from PyQt6.QtGui import QIntValidator, QIcon, QAction, QColor
 from PyQt6.QtWidgets import QStyle, QFileDialog
 from PyQt6.QtPrintSupport import QPrinter, QPrinterInfo, QPrintDialog
 
@@ -55,7 +55,7 @@ class InvoicePdfPreviewDialog(QDialog):
         self.view = QPdfView(self)
         self.view.setDocument(self.document)
         try:
-            self.view.setPageMode(QPdfView.PageMode.SinglePage)
+            self.view.setPageMode(QPdfView.PageMode.MultiPageVertical)
         except Exception:
             pass
         try:
@@ -281,6 +281,14 @@ class InvoicePdfPreviewDialog(QDialog):
         if self._document_ready:
             return
         count = int(self.document.pageCount() or 0)
+        if count <= 0:
+            self._valid = False
+            return
+        self._document_ready = True
+        self._page_count = count
+        self.page_input.setEnabled(True)
+        self._set_page(0)
+        self._update_zoom_label()
 
     # ----- PDF generation -----
     def generate_pdf(self, pdf_path: str, business_info: dict) -> bool:
@@ -862,35 +870,38 @@ class InvoiceWidget(QWidget):
             actions.setColumnStretch(c, 1)
         v.addLayout(actions)
 
+        # Main content area with two panels
+        main_content_layout = QHBoxLayout()
+        v.addLayout(main_content_layout)
+
+        # Left panel for the invoice table
+        invoice_panel = QWidget()
+        invoice_layout = QVBoxLayout(invoice_panel)
+        main_content_layout.addWidget(invoice_panel, 2) # Give more space to the invoice table
+
+        # Right panel for the items list
+        items_panel = QWidget()
+        items_layout = QVBoxLayout(items_panel)
+        main_content_layout.addWidget(items_panel, 1)
+
         # Filters row: client, location, product search
         filters = QHBoxLayout()
         self.client_cb = QComboBox(); self.client_cb.setEditable(True)
         self.location_cb = QComboBox(); self.location_cb.setEditable(False)
         self.search = QLineEdit(); self.search.setPlaceholderText('Search or scan product...')
-        self.search.returnPressed.connect(self._on_search_return)
-        # Use a QCompleter for inline results that doesn't steal focus
-        from PyQt6.QtWidgets import QCompleter
-        from PyQt6.QtGui import QStandardItemModel, QStandardItem
-        self._compl_model = QStandardItemModel(self)
-        self._completer = QCompleter(self._compl_model, self)
-        try:
-            self._completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-            self._completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
-        except Exception:
-            pass
-        self.search.setCompleter(self._completer)
-        # Update results as the user types (only when user edits)
-        self.search.textEdited.connect(self._on_search_text_changed)
-        # PyQt6 unified activated signal
-        self._completer.activated.connect(self._on_completer_activated)
+        self.search.textChanged.connect(self._on_search_text_changed)
+
+        # Add clear button to search bar
+        clear_icon = self._load_icon(["clear_black.svg"])
+        if not clear_icon.isNull():
+            clear_action = QAction(clear_icon, "Clear search", self)
+            clear_action.triggered.connect(self.search.clear)
+            self.search.addAction(clear_action, QLineEdit.ActionPosition.TrailingPosition)
+
         filters.addWidget(QLabel('Client'))
         filters.addWidget(self.client_cb, 1)
-        filters.addWidget(QLabel('Location'))
-        filters.addWidget(self.location_cb, 0)
-        filters.addWidget(self.search, 1)
-        v.addLayout(filters)
 
-        # (Old custom popup replaced by QCompleter)
+        invoice_layout.addLayout(filters)
 
         # Items table
         self.table = QTableWidget(0, 7)
@@ -911,7 +922,33 @@ class InvoiceWidget(QWidget):
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        v.addWidget(self.table)
+        invoice_layout.addWidget(self.table)
+
+        # Items panel content
+        items_layout.addWidget(QLabel("Available Items"))
+        items_filters = QHBoxLayout()
+        items_layout.addLayout(items_filters)
+        items_filters.addWidget(self.search, 1)
+        items_filters.addWidget(self.location_cb, 0)
+
+        self.items_table = QTableWidget(0, 3)
+        self.items_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.items_table.setAlternatingRowColors(True)
+        self.items_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.items_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.items_table.verticalHeader().setVisible(False)
+        self.items_table.setHorizontalHeaderLabels(['Product', 'Price', 'Available'])
+        h = self.items_table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        items_layout.addWidget(self.items_table)
+
+        add_item_button = QPushButton("Add to Invoice")
+        add_item_button.clicked.connect(self.on_add_item_from_panel)
+        items_layout.addWidget(add_item_button)
+
+        self.items_table.doubleClicked.connect(self._on_items_table_double_clicked)
 
         # Totals + Settings row
         bottom_row = QHBoxLayout()
@@ -1276,12 +1313,24 @@ class InvoiceWidget(QWidget):
 
     def on_remove_item(self):
         rows = sorted({idx.row() for idx in self.table.selectedIndexes()}, reverse=True)
+        removed_pids = set()
         for r in rows:
+            item = self.table.item(r, 1)
+            if item and item.data(Qt.ItemDataRole.UserRole):
+                removed_pids.add(item.data(Qt.ItemDataRole.UserRole))
             self.table.removeRow(r)
+
         # Re-index numbers
         for r in range(self.table.rowCount()):
             self.table.setItem(r, 0, QTableWidgetItem(str(r+1)))
         self._recompute_total()
+
+        # Un-highlight the removed items in the items_table
+        for r in range(self.items_table.rowCount()):
+            item = self.items_table.item(r, 0)
+            if item and item.data(Qt.ItemDataRole.UserRole) in removed_pids:
+                for col in range(self.items_table.columnCount()):
+                    self.items_table.item(r, col).setBackground(QColor('white'))
 
     def on_save(self):
         self._save_invoice(with_dialog=False)
@@ -1422,83 +1471,84 @@ class InvoiceWidget(QWidget):
         except Exception:
             pass
 
+    def on_add_item_from_panel(self):
+        selected_rows = self.items_table.selectionModel().selectedRows()
+        if not selected_rows:
+            return
+
+        for row in selected_rows:
+            pid = self.items_table.item(row.row(), 0).data(Qt.ItemDataRole.UserRole)
+            name = self.items_table.item(row.row(), 0).text()
+            price = float(self.items_table.item(row.row(), 1).text().replace(',', ''))
+            uom = self.items_table.item(row.row(), 0).data(Qt.ItemDataRole.UserRole+1)
+            self._add_item_row(pid, name, 1, price, uom=uom)
+
+            # Highlight the added row in the items_table
+            for r in range(self.items_table.rowCount()):
+                item = self.items_table.item(r, 0)
+                if item and item.data(Qt.ItemDataRole.UserRole) == pid:
+                    for col in range(self.items_table.columnCount()):
+                        self.items_table.item(r, col).setBackground(QColor('lightgreen'))
+                    break # Exit loop once found and highlighted
+
+    def _on_items_table_double_clicked(self, index: QModelIndex):
+        row = index.row()
+        pid = self.items_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        name = self.items_table.item(row, 0).text()
+        price = float(self.items_table.item(row, 1).text().replace(',', ''))
+        uom = self.items_table.item(row, 0).data(Qt.ItemDataRole.UserRole+1)
+        self._add_item_row(pid, name, 1, price, uom=uom)
+
+        # Highlight the added row in the items_table
+        for r in range(self.items_table.rowCount()):
+            item = self.items_table.item(r, 0)
+            if item and item.data(Qt.ItemDataRole.UserRole) == pid:
+                for col in range(self.items_table.columnCount()):
+                    self.items_table.item(r, col).setBackground(QColor('lightgreen'))
+                break # Exit loop once found and highlighted
+
     # ----- Inline search -----
     def _on_search_text_changed(self, text: str):
         text = (text or '').strip()
-        # Query top matches and feed the completer's model
+        # Query top matches and feed the items table
         try:
             rows = self.db.list_products(text if text else None, None) or []
         except Exception:
             rows = []
+        
+        # Get set of product IDs already in the invoice table for quick lookups
+        added_product_ids = set()
+        for r in range(self.table.rowCount()):
+            item = self.table.item(r, 1)  # Product name is in column 1
+            if item and item.data(Qt.ItemDataRole.UserRole):
+                added_product_ids.add(item.data(Qt.ItemDataRole.UserRole))
+
         # Rebuild model
-        from PyQt6.QtGui import QStandardItem
-        self._compl_model.clear()
-        max_items = 20
+        self.items_table.setRowCount(0)
+        max_items = 100
         for rid, barcode, sku, name, category, qty, price, reorder_point, uom in rows[:max_items]:
-            label_parts = [name or '']
-            code = barcode or sku
-            if code:
-                label_parts.append(f"[{code}]")
-            label_parts.append(f"{float(price or 0):,.2f}")
-            it = QStandardItem('  '.join(label_parts))
-            payload = {'pid': rid, 'name': name or '', 'price': float(price or 0), 'barcode': barcode, 'sku': sku, 'uom': uom or ''}
-            it.setData(payload, Qt.ItemDataRole.UserRole)
-            self._compl_model.appendRow(it)
-        # Show popup
-        try:
-            self._completer.complete()
-        except Exception:
-            pass
+            r = self.items_table.rowCount()
+            self.items_table.insertRow(r)
 
-    def _on_completer_activated(self, data):
-        try:
-            # data can be QModelIndex or string depending on signal binding
-            if hasattr(data, 'data'):
-                payload = data.data(Qt.ItemDataRole.UserRole)
-            else:
-                # Find first row text match (fallback)
-                payload = None
-                for r in range(self._compl_model.rowCount()):
-                    idx = self._compl_model.index(r,0)
-                    if self._compl_model.data(idx) == str(data):
-                        payload = self._compl_model.data(idx, Qt.ItemDataRole.UserRole)
-                        break
-            if payload:
-                # Use UOM from payload if available, otherwise fetch from database
-                uom = payload.get('uom')
-                if not uom:
-                    try:
-                        product_data = self.db.get_product(payload['pid'])
-                        if product_data and len(product_data) > 10:
-                            uom = product_data[10]
-                    except Exception:
-                        uom = ''
-                self._add_item_row(payload['pid'], payload['name'], 1, payload['price'], sku=payload.get('sku'), barcode=payload.get('barcode'), uom=uom)
-                QTimer.singleShot(0, self.search.clear)
-        except Exception:
-            pass
+            name_item = QTableWidgetItem(name or '')
+            name_item.setData(Qt.ItemDataRole.UserRole, rid)
+            name_item.setData(Qt.ItemDataRole.UserRole+1, uom)
+            self.items_table.setItem(r, 0, name_item)
 
-    def _on_search_return(self):
-        # Let completer handle activation; otherwise fallback to barcode/name add
-        self.on_add_from_search()
+            price_item = QTableWidgetItem(f"{float(price or 0):,.2f}")
+            price_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.items_table.setItem(r, 1, price_item)
 
-    def eventFilter(self, obj, event):
-        # Keyboard navigation for the popup using the search line edit
-        # Only intercept for navigation keys if completer popup is visible
-        if obj is self.search:
-            try:
-                from PyQt6.QtCore import QEvent
-                if event.type() == QEvent.Type.KeyPress:
-                    key = event.key()
-                    if key in (Qt.Key.Key_Escape,):
-                        try:
-                            self._completer.popup().hide()
-                        except Exception:
-                            pass
-                        return False
-            except Exception:
-                pass
-        return super().eventFilter(obj, event)
+            available_item = QTableWidgetItem(str(qty))
+            available_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.items_table.setItem(r, 2, available_item)
+
+            # Highlight row if item is already in the invoice
+            if rid in added_product_ids:
+                for col in range(self.items_table.columnCount()):
+                    self.items_table.item(r, col).setBackground(QColor('lightgreen'))
+
+
 
     # (No focusOut wrapper; Qt handles Popup close when clicking elsewhere)
 
@@ -1817,6 +1867,10 @@ class InvoiceWidget(QWidget):
                     pdf.cell(w, row_height, cell, 1, 0, al, fill)
                 pdf.ln()
             write_row(headers, widths, aligns, is_header=True, row_height=7, fill=True)
+            def format_price(value, decimals=2):
+                format_spec = f",.{decimals}f"
+                return format(value, format_spec).replace(",", " ")
+
             for idx, it in enumerate(items):
                 fill = (idx % 2 == 1)
                 if fill:
@@ -1843,9 +1897,9 @@ class InvoiceWidget(QWidget):
                             unit = ''
                 
                 if include_unit:
-                    row = [str(idx + 1), name, unit, f"{qty:g}", f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
+                    row = [str(idx + 1), name, unit, f"{qty:g}", f"{format_price(price)} {currency}", f"{format_price(line_total)} {currency}"]
                 else:
-                    row = [str(idx + 1), name, f"{qty:g}", f"{price:,.2f} {currency}", f"{line_total:,.2f} {currency}"]
+                    row = [str(idx + 1), name, f"{qty:g}", f"{format_price(price)} {currency}", f"{format_price(line_total)} {currency}"]
                 if lang == 'ar':
                     row.reverse()
                 write_row(row, widths, aligns, is_header=False, row_height=7, fill=True)
@@ -1856,26 +1910,26 @@ class InvoiceWidget(QWidget):
             pdf.set_font(main_font, '', 10)
             if lang == 'ar':
                 subtotal_text = get_display(arabic_reshaper.reshape(strings[lang]['subtotal']))
-                pdf.cell(total_w_ar, 8, f"{subtotal:,.2f} {currency}", 1, 0, 'L')
+                pdf.cell(total_w_ar, 8, f"{format_price(subtotal)} {currency}", 1, 0, 'L')
                 pdf.cell(table_width-total_w_ar, 8, subtotal_text, 1, 1, 'L')
                 tax_text = get_display(arabic_reshaper.reshape(strings[lang]['tax']))
-                pdf.cell(total_w_ar, 8, f"{tax_amount:,.2f} {currency}", 1, 0, 'L')
+                pdf.cell(total_w_ar, 8, f"{format_price(tax_amount)} {currency}", 1, 0, 'L')
                 pdf.cell(table_width-total_w_ar, 8, tax_text, 1, 1, 'L')
                 pdf.set_font(main_font, 'B', 12)
                 total_due_text = get_display(arabic_reshaper.reshape(strings[lang]['total_due']))
-                pdf.cell(total_w_ar, 8, f"{total_amount:,.2f} {currency}", 1, 0, 'L', 1)
+                pdf.cell(total_w_ar, 8, f"{format_price(total_amount)} {currency}", 1, 0, 'L', 1)
                 pdf.cell(table_width-total_w_ar, 8, total_due_text, 1, 1, 'L', 1)
             else:
                 subtotal_text = strings[lang]['subtotal']
                 pdf.cell(table_width-total_w, 8, subtotal_text, 1, 0, 'R')
-                pdf.cell(total_w, 8, f"{subtotal:,.2f} {currency}", 1, 1, 'R')
+                pdf.cell(total_w, 8, f"{format_price(subtotal)} {currency}", 1, 1, 'R')
                 tax_text = 'Tax'
                 pdf.cell(table_width-total_w, 8, tax_text, 1, 0, 'R')
-                pdf.cell(total_w, 8, f"{tax_amount:,.2f} {currency}", 1, 1, 'R')
+                pdf.cell(total_w, 8, f"{format_price(tax_amount)} {currency}", 1, 1, 'R')
                 pdf.set_font(main_font, 'B', 12)
                 total_due_text = strings[lang]['total_due']
                 pdf.cell(table_width-total_w, 8, total_due_text, 1, 0, 'R', 1)
-                pdf.cell(total_w, 8, f"{total_amount:,.2f} {currency}", 1, 1, 'R', 1)
+                pdf.cell(total_w, 8, f"{format_price(total_amount)} {currency}", 1, 1, 'R', 1)
             pdf.ln(3)
             # Amount in words
             if num2words is not None:
